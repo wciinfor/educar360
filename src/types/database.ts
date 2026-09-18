@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -128,6 +128,21 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Lead>;
+      };
+      students: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      guardians: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      student_guardians: {
+        Row: any;
+        Insert: any;
+        Update: any;
       };
     };
   };
