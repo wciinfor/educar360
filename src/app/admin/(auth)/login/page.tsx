@@ -312,34 +312,6 @@ export default function PlatformLoginPage() {
       {/* Clean Footer */}
       <footer className="relative z-20 w-full bg-black/60 border-t border-white/10 backdrop-blur-md py-4 px-6 lg:px-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-emerald-200/70">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/images/landing/logoh_escuro.png"
-              alt="Educar360 Backoffice"
-              width={140}
-              height={38}
-              className="h-7 sm:h-8 w-auto object-contain drop-shadow-xs"
-            />
-          </div>
-
-          <div className="flex items-center gap-6">
-            <Link href={landingUrl} className="hover:text-white transition-colors">
-              Início
-            </Link>
-            <a
-              href="mailto:suporte@educar360.com.br"
-              className="hover:text-white transition-colors"
-            >
-              Suporte
-            </a>
-            <Link href={landingUrl} className="hover:text-white transition-colors">
-              Termos de Uso
-            </Link>
-            <Link href={landingUrl} className="hover:text-white transition-colors">
-              Política de Privacidade
-            </Link>
-          </div>
-
           <p className="text-emerald-200/70">
             &copy; {new Date().getFullYear()} Educar360. Todos os direitos reservados.
           </p>

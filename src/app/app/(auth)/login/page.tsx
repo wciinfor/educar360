@@ -200,8 +200,15 @@ export default function TenantLoginPage() {
               
               {/* Card Header Icon & Titles */}
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 shadow-sm mb-4">
-                  <GraduationCap className="w-7 h-7" />
+                <div className="flex justify-center mb-4">
+                  <Image
+                    src="/images/landing/logov.png"
+                    alt="Educar360 - Gestão escolar sem limites"
+                    width={110}
+                    height={110}
+                    priority
+                    className="h-20 sm:h-22 w-auto object-contain drop-shadow-sm"
+                  />
                 </div>
                 <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                   Acesso à sua Escola
@@ -324,34 +331,6 @@ export default function TenantLoginPage() {
       {/* Modern Clean Footer */}
       <footer className="relative z-20 w-full bg-slate-900/80 border-t border-white/10 backdrop-blur-md py-4 px-6 lg:px-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/images/landing/logoh_escuro.png"
-              alt="Educar360"
-              width={140}
-              height={38}
-              className="h-7 sm:h-8 w-auto object-contain drop-shadow-xs"
-            />
-          </div>
-
-          <div className="flex items-center gap-6">
-            <Link href={landingUrl} className="hover:text-slate-200 transition-colors">
-              Início
-            </Link>
-            <a
-              href="mailto:suporte@educar360.com.br"
-              className="hover:text-slate-200 transition-colors"
-            >
-              Suporte
-            </a>
-            <Link href={landingUrl} className="hover:text-slate-200 transition-colors">
-              Termos de Uso
-            </Link>
-            <Link href={landingUrl} className="hover:text-slate-200 transition-colors">
-              Política de Privacidade
-            </Link>
-          </div>
-
           <p className="text-slate-400">
             &copy; {new Date().getFullYear()} Educar360. Todos os direitos reservados.
           </p>

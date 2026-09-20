@@ -132,14 +132,14 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
       <div className="absolute bottom-0 left-0 w-60 h-60 bg-sky-50/70 rounded-full blur-3xl pointer-events-none -ml-20 -mb-20" />
 
       <div className="relative z-10 mb-8 space-y-3">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-xs">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-xs">
           <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
           <span>Experimente Grátis por 14 Dias</span>
         </div>
-        <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+        <h3 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
           Inicie o Teste da Sua Escola
         </h3>
-        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-xl">
+        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-2xl">
           Sem necessidade de cartão de crédito. Ativação imediata de um tenant dedicado com suporte completo na importação dos dados dos alunos.
         </p>
       </div>
@@ -151,8 +151,9 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="relative z-10 space-y-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+      <form onSubmit={handleSubmit} className="relative z-10 space-y-5 sm:space-y-6">
+        {/* Linha 1: Dados Principais (Escola e Contato) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Nome da Instituição Escolar *
@@ -196,7 +197,8 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+        {/* Linha 2: Contatos (Email e WhatsApp) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               E-mail Institucional *
@@ -240,7 +242,8 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+        {/* Linha 3: Perfil e Parâmetros (Cargo, Alunos, Plano) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Seu Cargo na Escola
@@ -279,7 +282,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
             </select>
           </div>
 
-          <div>
+          <div className="sm:col-span-2 lg:col-span-1">
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Plano de Interesse
             </label>
@@ -300,6 +303,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           </div>
         </div>
 
+        {/* Linha 4: Observações */}
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
             Observações ou Desafios Principais (Opcional)
@@ -315,6 +319,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           />
         </div>
 
+        {/* Linha 5: Botão de Ação */}
         <div className="pt-2">
           <button
             type="submit"
@@ -335,6 +340,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           </button>
         </div>
 
+        {/* Badges de Garantia e Confiança */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-[11px] text-slate-400 pt-1 text-center">
           <span className="flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />

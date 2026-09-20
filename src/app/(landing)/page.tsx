@@ -721,7 +721,7 @@ export default function LandingPage() {
       </section>
 
       {/* 9. FORMULÁRIO DE CAPTAÇÃO (TRIAL) */}
-      <section id="trial-form" className="max-w-4xl mx-auto px-6 scroll-mt-24">
+      <section id="trial-form" className="max-w-7xl mx-auto px-6 scroll-mt-24 -mt-6 sm:-mt-8">
         <LeadForm />
       </section>
 
@@ -931,13 +931,13 @@ export default function LandingPage() {
               &copy; {new Date().getFullYear()} Educar360. Todos os direitos reservados.
             </p>
             <div className="flex items-center gap-6">
-              <a href="#faq" className="hover:text-slate-300 transition-colors">
+              <Link href="/politica-de-privacidade" className="hover:text-slate-300 transition-colors">
                 Política de Privacidade
-              </a>
+              </Link>
               <span>•</span>
-              <a href="#faq" className="hover:text-slate-300 transition-colors">
+              <Link href="/termos-de-uso" className="hover:text-slate-300 transition-colors">
                 Termos de Uso
-              </a>
+              </Link>
               <span>•</span>
               <span className="text-emerald-400 font-medium">Educação que transforma futuros</span>
             </div>
