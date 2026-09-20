@@ -117,16 +117,14 @@ export default function PlatformLoginPage() {
       {/* Top Navbar */}
       <header className="relative z-20 w-full max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
         <Link href={landingUrl} className="flex items-center gap-3 group">
-          <div className="bg-white px-3.5 py-2 rounded-xl shadow-md group-hover:shadow-lg transition-all">
-            <Image
-              src="/images/landing/logoh.png"
-              alt="Educar360 Backoffice"
-              width={160}
-              height={40}
-              priority
-              className="h-8 sm:h-9 w-auto object-contain"
-            />
-          </div>
+          <Image
+            src="/images/landing/logoh_cont.png"
+            alt="Educar360 Backoffice"
+            width={180}
+            height={46}
+            priority
+            className="h-10 sm:h-11 w-auto object-contain drop-shadow-md group-hover:scale-[1.02] transition-transform"
+          />
         </Link>
 
         <Link
@@ -315,15 +313,13 @@ export default function PlatformLoginPage() {
       <footer className="relative z-20 w-full bg-black/60 border-t border-white/10 backdrop-blur-md py-4 px-6 lg:px-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-emerald-200/70">
           <div className="flex items-center gap-3">
-            <div className="bg-white px-2 py-1 rounded-lg shadow-xs">
-              <Image
-                src="/images/landing/logoh.png"
-                alt="Educar360 Backoffice"
-                width={110}
-                height={28}
-                className="h-5 w-auto object-contain"
-              />
-            </div>
+            <Image
+              src="/images/landing/logoh_cont.png"
+              alt="Educar360 Backoffice"
+              width={120}
+              height={32}
+              className="h-6 w-auto object-contain drop-shadow-xs"
+            />
           </div>
 
           <div className="flex items-center gap-6">
