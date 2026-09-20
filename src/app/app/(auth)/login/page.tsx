@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "@/types/database";
-import { getLandingBaseUrl } from "@/lib/urls";
+import { getLandingBaseUrl, getAdminBaseUrl } from "@/lib/urls";
 import {
   GraduationCap,
   Lock,
@@ -22,6 +22,7 @@ import {
   Building2,
   ArrowLeft,
   Loader2,
+  Shield,
 } from "lucide-react";
 
 export default function TenantLoginPage() {
@@ -33,6 +34,7 @@ export default function TenantLoginPage() {
   const router = useRouter();
   const supabase = createClient();
   const landingUrl = getLandingBaseUrl();
+  const adminUrl = getAdminBaseUrl();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,132 +197,145 @@ export default function TenantLoginPage() {
           </div>
 
           {/* Right Column: Modern White Login Card */}
-          <div className="lg:col-span-6 flex justify-center lg:justify-end">
-            <div className="w-full max-w-[440px] bg-white rounded-3xl p-8 sm:p-10 shadow-2xl shadow-blue-950/40 border border-slate-100 text-slate-900 relative">
-              
-              {/* Card Header Icon & Titles */}
-              <div className="text-center">
-                <div className="flex justify-center mb-4">
-                  <Image
-                    src="/images/landing/logov.png"
-                    alt="Educar360 - Gestão escolar sem limites"
-                    width={110}
-                    height={110}
-                    priority
-                    className="h-20 sm:h-22 w-auto object-contain drop-shadow-sm"
-                  />
-                </div>
-                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-                  Acesso à sua Escola
-                </h2>
-                <p className="mt-1.5 text-xs sm:text-sm text-slate-500">
-                  Entre com seu e-mail institucional para acessar o Educar360.
-                </p>
-              </div>
-
-              {/* Form */}
-              <form className="mt-7 space-y-5" onSubmit={handleLogin}>
-                {errorMsg && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-700 text-xs leading-relaxed">
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                    <span>{errorMsg}</span>
-                  </div>
-                )}
-
-                {/* Email Field */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    E-mail institucional
-                  </label>
-                  <div className="relative rounded-xl">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Mail className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="voce@escola.com.br"
-                      className="block w-full pl-10 pr-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all"
+          <div className="lg:col-span-6 flex flex-col items-center lg:items-end">
+            <div className="w-full max-w-[440px]">
+              <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-2xl shadow-blue-950/40 border border-slate-100 text-slate-900 relative">
+                
+                {/* Card Header Icon & Titles */}
+                <div className="text-center">
+                  <div className="flex justify-center mb-4">
+                    <Image
+                      src="/images/landing/logov.png"
+                      alt="Educar360 - Gestão escolar sem limites"
+                      width={110}
+                      height={110}
+                      priority
+                      className="h-20 sm:h-22 w-auto object-contain drop-shadow-sm"
                     />
                   </div>
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                    Acesso à sua Escola
+                  </h2>
+                  <p className="mt-1.5 text-xs sm:text-sm text-slate-500">
+                    Entre com seu e-mail institucional para acessar o Educar360.
+                  </p>
                 </div>
 
-                {/* Password Field */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Senha
+                {/* Form */}
+                <form className="mt-7 space-y-5" onSubmit={handleLogin}>
+                  {errorMsg && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-700 text-xs leading-relaxed">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Email Field */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                      E-mail institucional
                     </label>
-                  </div>
-                  <div className="relative rounded-xl">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Lock className="h-4 w-4" />
+                    <div className="relative rounded-xl">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="voce@escola.com.br"
+                        className="block w-full pl-10 pr-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all"
+                      />
                     </div>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Sua senha"
-                      className="block w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all"
-                    />
+                  </div>
+
+                  {/* Password Field */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Senha
+                      </label>
+                    </div>
+                    <div className="relative rounded-xl">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="h-4 w-4" />
+                      </div>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Sua senha"
+                        className="block w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+                        title={showPassword ? "Ocultar senha" : "Ver senha"}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="mt-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          alert(
+                            "Para recuperar sua senha escolar, entre em contato com a secretaria ou o administrador da sua instituição de ensino."
+                          )
+                        }
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                      >
+                        Esqueceu sua senha?
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-1">
                     <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
-                      title={showPassword ? "Ocultar senha" : "Ver senha"}
+                      type="submit"
+                      disabled={loading}
+                      className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl shadow-lg shadow-blue-600/25 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all transform active:scale-[0.99]"
                     >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Entrando na Escola...</span>
+                        </>
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <>
+                          <span>Entrar na Escola</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
                       )}
                     </button>
                   </div>
+                </form>
 
-                  <div className="mt-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        alert(
-                          "Para recuperar sua senha escolar, entre em contato com a secretaria ou o administrador da sua instituição de ensino."
-                        )
-                      }
-                      className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline transition-colors"
-                    >
-                      Esqueceu sua senha?
-                    </button>
-                  </div>
+                {/* Card Footer Security Badge */}
+                <div className="mt-6 pt-5 border-t border-slate-100 text-center flex items-center justify-center gap-2 text-slate-400 text-xs">
+                  <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Ambiente seguro com isolamento por instituição.</span>
                 </div>
+              </div>
 
-                {/* Submit Button */}
-                <div className="pt-1">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex justify-center items-center gap-2 py-3.5 px-4 rounded-xl shadow-lg shadow-blue-600/25 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-600 disabled:opacity-60 disabled:cursor-not-allowed transition-all transform active:scale-[0.99]"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Entrando na Escola...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Entrar na Escola</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-
-              {/* Card Footer Security Badge */}
-              <div className="mt-6 pt-5 border-t border-slate-100 text-center flex items-center justify-center gap-2 text-slate-400 text-xs">
-                <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                <span>Ambiente seguro com isolamento por instituição.</span>
+              {/* Acesso discreto da equipe exatamente abaixo do card */}
+              <div className="mt-4 text-center">
+                <Link
+                  href={adminUrl ? `${adminUrl}/login` : "/admin/login"}
+                  className="inline-flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors py-1.5 px-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10"
+                >
+                  <Shield className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Acesso equipe Educar360</span>
+                </Link>
               </div>
             </div>
           </div>
