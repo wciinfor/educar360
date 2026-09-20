@@ -130,12 +130,12 @@ export default function TenantLoginPage() {
       <header className="relative z-20 w-full max-w-7xl mx-auto px-6 lg:px-10 py-6 flex items-center justify-between">
         <Link href={landingUrl} className="flex items-center gap-3 group">
           <Image
-            src="/images/landing/logoh_cont.png"
+            src="/images/landing/logoh_escuro.png"
             alt="Educar360 - Gestão escolar sem limites"
-            width={180}
-            height={46}
+            width={210}
+            height={56}
             priority
-            className="h-10 sm:h-11 w-auto object-contain drop-shadow-md group-hover:scale-[1.02] transition-transform"
+            className="h-12 sm:h-14 w-auto object-contain drop-shadow-md group-hover:scale-[1.02] transition-transform"
           />
         </Link>
 
@@ -326,11 +326,11 @@ export default function TenantLoginPage() {
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div className="flex items-center gap-3">
             <Image
-              src="/images/landing/logoh_cont.png"
+              src="/images/landing/logoh_escuro.png"
               alt="Educar360"
-              width={120}
-              height={32}
-              className="h-6 w-auto object-contain drop-shadow-xs"
+              width={140}
+              height={38}
+              className="h-7 sm:h-8 w-auto object-contain drop-shadow-xs"
             />
           </div>
 
