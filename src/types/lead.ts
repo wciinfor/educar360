@@ -1,4 +1,4 @@
-﻿export type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "discarded";
+export type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "discarded";
 
 export interface Lead {
   id: string;
@@ -33,6 +33,13 @@ export interface LeadResponse {
   success: boolean;
   message: string;
   error?: string;
+  tenant_id?: string;
+  tenant_name?: string;
+  tenant_slug?: string;
+  invite_token?: string;
+  activation_url?: string;
+  email_sent?: boolean;
+  email_error?: string;
 }
 
 export interface ConvertLeadResult {

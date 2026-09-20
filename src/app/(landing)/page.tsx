@@ -35,164 +35,160 @@ export default function LandingPage() {
 
   const faqs = [
     {
-      q: "Como funciona o período de trial gratuito de 14 dias?",
-      a: "Você tem acesso irrestrito aos módulos da plataforma por 14 dias para testar na prática com sua equipe. Não exigimos cartão de crédito para iniciar e todo o ambiente é configurado em poucos minutos.",
+      q: "Como funciona o período de teste gratuito de 14 dias?",
+      a: "Você tem acesso irrestrito a todos os módulos do sistema por 14 dias para testar na prática com sua equipe. Não exigimos cartão de crédito para iniciar e todo o ambiente é configurado em poucos minutos.",
     },
     {
-      q: "O que acontece com os dados da minha escola? Eles ficam isolados?",
-      a: "Sim, com rigor absoluto. O Educar360 foi construído com arquitetura multi-tenant onde cada escola é um tenant independente com Row-Level Security (RLS) no PostgreSQL. Nenhuma outra instituição ou usuário comum tem acesso aos seus dados.",
+      q: "Os dados da minha escola ficam realmente seguros e protegidos?",
+      a: "Sim, com total privacidade e isolamento. O Educar360 protege as informações de cada instituição de forma independente e criptografada, em total conformidade com a LGPD. Nenhuma outra escola tem acesso aos seus dados cadastrais, financeiros ou notas.",
     },
     {
       q: "Qual a diferença entre os planos Start, Essencial, Profissional e Enterprise?",
-      a: "O Start (R$ 199/mês) atende até 100 alunos com foco em Secretaria e Acadêmico. O Essencial (R$ 299/mês) expande para até 200 alunos. O Profissional (R$ 499/mês) atende até 500 alunos com módulo financeiro integrado. O Enterprise é sob consulta para redes acima de 500 alunos.",
+      a: "O Start (R$ 199/mês) atende até 100 alunos com foco em Secretaria e Acadêmico. O Essencial (R$ 299/mês) expande para até 200 alunos. O Profissional (R$ 499/mês) atende até 500 alunos com módulo financeiro integrado. O Enterprise é sob medida para redes de ensino acima de 500 alunos.",
     },
     {
       q: "É possível migrar dados de alunos e turmas de planilhas ou sistemas antigos?",
       a: "Sim. Oferecemos suporte guiado de importação de alunos, responsáveis e turmas para que sua escola não precise recadastrar nada manualmente.",
     },
     {
-      q: "Os pais e professores têm acessos e portais separados?",
-      a: "Sim. O sistema conta com controle de acesso granular (RBAC) com visões dedicadas para Professores, Pais/Responsáveis e Alunos, totalmente responsivo para celulares.",
+      q: "Os pais e professores têm acessos separados no sistema?",
+      a: "Sim. O sistema possui perfis de acesso exclusivos para Professores (diário e frequência), Pais/Responsáveis (acompanhamento dos filhos) e Alunos, totalmente otimizado para celulares.",
     },
     {
       q: "Como funciona a contratação do Plano Enterprise?",
-      a: "Para instituições com mais de 500 alunos ou redes com múltiplas unidades, disponibilizamos contrato sob medida e condições especiais sob consulta.",
+      a: "Para instituições com mais de 500 alunos ou redes de ensino com múltiplas unidades, disponibilizamos proposta personalizada e condições exclusivas sob consulta.",
     },
   ];
 
   return (
-    <div className="space-y-20 sm:space-y-28 pb-16 overflow-hidden">
-      {/* 1. HERO SECTION EMOCIONAL + VISUAL BASEADO NO DESIGN */}
-      <section className="relative pt-6 sm:pt-12 lg:pt-16 pb-6 overflow-hidden">
-        {/* Glow de fundo sutil */}
-        <div className="absolute top-0 right-0 w-full max-w-4xl h-[600px] bg-radial from-sky-100/60 via-indigo-50/30 to-transparent blur-3xl pointer-events-none -z-10" />
+    <div className="overflow-hidden min-h-screen flex flex-col">
+      {/* BARRA DE MENU SUPERIOR */}
+      <header className="border-b border-slate-100 bg-white/95 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-[72px] flex items-center justify-between">
+          {/* Logo */}
+          <Link href="/" className="flex items-center group shrink-0 py-2">
+            <Image
+              src="/images/landing/logoh.png"
+              alt="Educar360 - Gestão escolar sem limites"
+              width={180}
+              height={44}
+              priority
+              className="h-10 sm:h-11 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            />
+          </Link>
 
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8 items-center">
-            
-            {/* LADO ESQUERDO: TEXTO E CTAS */}
-            <div className="lg:col-span-5 space-y-6 text-left">
-              <motion.div
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-200 bg-blue-50/70 text-blue-800 text-xs sm:text-sm font-semibold"
+          {/* Navegação central com aba Início ativa */}
+          <nav className="hidden md:flex items-center gap-8 text-sm text-slate-600 font-medium h-full">
+            <Link
+              href="/"
+              className="text-blue-600 font-bold relative py-6 border-b-2 border-blue-600 -mb-[1px]"
+            >
+              Início
+            </Link>
+            <a href="#modulos" className="hover:text-blue-700 transition-colors py-6">
+              Soluções
+            </a>
+            <a href="#planos" className="hover:text-blue-700 transition-colors py-6">
+              Planos
+            </a>
+            <a href="#diferenciais" className="hover:text-blue-700 transition-colors py-6">
+              Diferenciais
+            </a>
+            <a href="#faq" className="hover:text-blue-700 transition-colors py-6">
+              FAQ
+            </a>
+          </nav>
+
+          {/* Ações */}
+          <div className="flex items-center">
+            <Link
+              href="/app/login"
+              className="px-5 py-2.5 text-sm font-bold rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/25 transition-all flex items-center gap-1.5 hover:scale-[1.02]"
+            >
+              <span>Acesso ao sistema</span>
+              <span>→</span>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* 1. HERO SECTION INTEGRADA COM FORMATO COMPACTO E ELEGANTE */}
+      <section 
+        className="relative pt-6 sm:pt-10 lg:pt-12 pb-8 sm:pb-12 lg:pb-14 overflow-hidden bg-no-repeat min-h-[500px] sm:min-h-[540px] md:min-h-[580px] lg:min-h-[620px] flex items-center bg-cover bg-[center_top] sm:bg-[right_top]"
+        style={{ 
+          backgroundImage: "url('/images/landing/hero3.png')",
+        }}
+      >
+        {/* Camada de fade suave à esquerda para garantir legibilidade 100% nítida de todo o texto */}
+        <div className="absolute inset-y-0 left-0 w-full lg:w-[60%] bg-linear-to-r from-white via-white/95 sm:via-white/85 to-transparent pointer-events-none z-1" />
+        {/* Proteção superior para telas mobile/tablet */}
+        <div className="absolute inset-0 bg-linear-to-b from-white/90 via-white/70 to-transparent lg:hidden pointer-events-none z-1" />
+
+        <div className="max-w-7xl mx-auto px-6 w-full relative z-10">
+          <div className="max-w-xl md:max-w-2xl space-y-4 text-left">
+            {/* Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-200/90 bg-white/95 backdrop-blur-sm text-blue-700 text-xs sm:text-sm font-semibold shadow-xs"
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+              <span>O Sistema de Gestão Escolar Completo</span>
+            </motion.div>
+
+            {/* Headline */}
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-slate-900 leading-[1.12]"
+            >
+              Mais tempo <br />
+              para educar. <br />
+              <span className="text-blue-700">
+                Menos burocracia para você.
+              </span>
+            </motion.h1>
+
+            {/* Subheadline */}
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-sm sm:text-base text-slate-700 sm:text-slate-600 font-normal leading-relaxed max-w-lg"
+            >
+              O Educar360 é a plataforma de gestão escolar completa para instituições de ensino que desejam organização, segurança e crescimento, em um ambiente 100% online e seguro para a sua escola.
+            </motion.p>
+
+            {/* Botões de Ação */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3.5 pt-1"
+            >
+              <a
+                href="#trial-form"
+                className="w-full sm:w-auto px-7 py-3 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 text-sm sm:text-base hover:scale-[1.02] cursor-pointer"
               >
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                <span>O ERP Escolar SaaS de Próxima Geração</span>
-              </motion.div>
-
-              <motion.h1
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-[1.1]"
+                <span>Testar Grátis por 14 dias</span>
+                <ArrowRight className="w-4 h-4" />
+              </a>
+              <a
+                href="#planos"
+                className="w-full sm:w-auto px-6 py-3 rounded-xl font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs transition-all text-sm text-center"
               >
-                Mais tempo <br />
-                para educar. <br />
-                <span className="text-blue-700">
-                  Menos burocracia para você.
-                </span>
-              </motion.h1>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-                className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed"
-              >
-                O Educar360 simplifica a gestão da sua escola para que sua equipe possa dedicar mais tempo ao que realmente importa: a educação.
-              </motion.p>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.3 }}
-                className="flex flex-col sm:flex-row items-center gap-4 pt-2"
-              >
-                <a
-                  href="#trial-form"
-                  className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2.5 text-base hover:scale-[1.02] cursor-pointer"
-                >
-                  <span>Testar Grátis por 14 dias</span>
-                  <ArrowRight className="w-5 h-5" />
-                </a>
-                <a
-                  href="#planos"
-                  className="w-full sm:w-auto px-6 py-4 rounded-xl font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 shadow-xs transition-all text-sm text-center"
-                >
-                  Conhecer os planos
-                </a>
-              </motion.div>
-            </div>
-
-            {/* LADO DIREITO: COMPOSIÇÃO FOTOGRAFIA + MOCKUP + CARDS FLUTUANTES */}
-            <div className="lg:col-span-7 relative">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.7, delay: 0.2 }}
-                className="relative"
-              >
-                {/* Imagem Principal de Pessoas (Alunos + Professora) */}
-                <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-100 aspect-[4/3] max-h-[460px] w-full">
-                  <Image
-                    src="/images/landing/hero_escola_alunos_professor.jpg"
-                    alt="Professora e estudantes em ambiente escolar moderno"
-                    fill
-                    priority
-                    className="object-cover object-top"
-                  />
-                  {/* Gradiente sutil para legibilidade dos cards */}
-                  <div className="absolute inset-0 bg-linear-to-t from-slate-950/40 via-transparent to-transparent pointer-events-none" />
-                </div>
-
-                {/* Badge Flutuante 1: Frase de Impacto Superior Direita */}
-                <div className="hidden sm:flex items-center gap-2 absolute top-4 right-4 bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-white shadow-xl">
-                  <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-xs font-semibold tracking-wide">
-                    Educação é construir novos futuros
-                  </span>
-                </div>
-
-                {/* Mockup do Dashboard Sobreposto (Lado Inferior Direito) */}
-                <motion.div
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="absolute -bottom-10 right-2 sm:right-6 w-[70%] sm:w-[60%] max-w-[380px] bg-white p-2 rounded-2xl border border-slate-200/90 shadow-2xl shadow-blue-900/20"
-                >
-                  <div className="rounded-xl overflow-hidden border border-slate-100 relative group">
-                    <Image
-                      src="/images/mockups/educar360_hero_dashboard_mockup.jpg"
-                      alt="Interface do Dashboard Educar360"
-                      width={600}
-                      height={340}
-                      className="w-full h-auto object-cover"
-                    />
-                  </div>
-                </motion.div>
-
-                {/* Badge Flutuante 2: Gestão Completa (Acima do Mockup) */}
-                <div className="hidden sm:flex items-center gap-3 absolute top-1/2 -right-4 bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/60 max-w-[210px]">
-                  <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-                    <School className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-bold text-slate-900 leading-tight">Gestão completa</p>
-                    <p className="text-[10px] text-slate-500">para uma educação que transforma</p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-
+                Conhecer os planos
+              </a>
+            </motion.div>
           </div>
         </div>
       </section>
 
-      {/* 2. FAIXA VISUAL DE CONFIANÇA E SEGURANÇA */}
-      <section className="max-w-7xl mx-auto px-6">
-        <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-xs">
+      {/* 2. FAIXA VISUAL DE CONFIANÇA E BENEFÍCIOS (CARD INDEPENDENTE IMEDIATAMENTE ABAIXO DO HERO) */}
+      <section className="max-w-7xl mx-auto px-6 relative z-10 mt-6 sm:mt-8 mb-12 sm:mb-16">
+        <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-slate-100">
             
             <div className="pt-3 md:pt-0 flex flex-col items-center justify-center gap-1.5">
@@ -214,9 +210,9 @@ export default function LandingPage() {
             <div className="pt-3 md:pt-0 flex flex-col items-center justify-center gap-1.5">
               <div className="flex items-center gap-2 text-blue-700 font-bold text-sm sm:text-base">
                 <Database className="w-4 h-4" />
-                <span>Multi-tenant</span>
+                <span>Dados Isolados</span>
               </div>
-              <p className="text-xs text-slate-500">com PostgreSQL RLS</p>
+              <p className="text-xs text-slate-500">privacidade total por escola</p>
             </div>
 
             <div className="pt-3 md:pt-0 flex flex-col items-center justify-center gap-1.5">
@@ -231,8 +227,10 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 3. MÓDULOS COMO EXPERIÊNCIAS VISUAIS (BENTO GRID MODERNO) */}
-      <section id="modulos" className="max-w-7xl mx-auto px-6 scroll-mt-24 space-y-12">
+      {/* CONTAINER DAS DEMAIS SEÇÕES COM ESPAÇAMENTO CONTROLADO */}
+      <div className="space-y-20 sm:space-y-28">
+        {/* 3. MÓDULOS COMO EXPERIÊNCIAS VISUAIS (BENTO GRID MODERNO) */}
+        <section id="modulos" className="max-w-7xl mx-auto px-6 scroll-mt-24 space-y-12">
         <div className="text-center max-w-2xl mx-auto space-y-3">
           <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
             Tudo o que a sua escola precisa, em um só lugar
@@ -460,8 +458,8 @@ export default function LandingPage() {
                   <Check className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900">Isolamento Multi-Tenant Garantido</h4>
-                  <p className="text-xs text-slate-500">Todas as consultas e edições possuem isolamento rigoroso via Row-Level Security no PostgreSQL.</p>
+                  <h4 className="text-sm font-bold text-slate-900">Privacidade e Segurança Total</h4>
+                  <p className="text-xs text-slate-500">Todas as informações da sua instituição são protegidas com controle rigoroso de acesso e criptografia.</p>
                 </div>
               </div>
 
@@ -562,8 +560,8 @@ export default function LandingPage() {
                   <Check className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900">Isolamento Financeiro por Tenant</h4>
-                  <p className="text-xs text-slate-500">Dados protegidos e isolados por instituição via Row-Level Security.</p>
+                  <h4 className="text-sm font-bold text-slate-900">Informações Protegidas e Exclusivas</h4>
+                  <p className="text-xs text-slate-500">Dados financeiros restritos exclusivamente aos administradores da sua instituição.</p>
                 </div>
               </div>
             </div>
@@ -598,7 +596,7 @@ export default function LandingPage() {
               </h2>
 
               <p className="text-sm sm:text-base text-blue-200 leading-relaxed">
-                Projetado com arquitetura Mobile-First, o portal dos responsáveis foi desenhado para aproximar a escola das famílias com segurança e facilidade.
+                Desenvolvido para smartphones, o portal dos responsáveis aproxima a escola das famílias com praticidade e total segurança.
               </p>
 
               <div className="space-y-3 pt-2">
@@ -606,21 +604,21 @@ export default function LandingPage() {
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                     <Check className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs sm:text-sm text-blue-100">Experiência pensada para smartphones</span>
+                  <span className="text-xs sm:text-sm text-blue-100">Experiência pensada para celulares</span>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                     <Check className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs sm:text-sm text-blue-100">Acesso seguro com credenciais por perfil</span>
+                  <span className="text-xs sm:text-sm text-blue-100">Acesso seguro com login individual por responsável</span>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                     <Check className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-xs sm:text-sm text-blue-100">Controle de acesso granular RBAC</span>
+                  <span className="text-xs sm:text-sm text-blue-100">Perfis exclusivos para professores, pais e alunos</span>
                 </div>
               </div>
 
@@ -769,36 +767,41 @@ export default function LandingPage() {
           })}
         </div>
       </section>
+      </div>
 
-      {/* 11. CTA FINAL FORTE COM FUNDO AZUL PROFUNDO (IDÊNTICO À REFERÊNCIA) */}
-      <section className="max-w-6xl mx-auto px-6">
-        <div className="bg-blue-950 rounded-3xl p-8 sm:p-12 text-white shadow-2xl relative overflow-hidden">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
+      {/* 11. ENCERRAMENTO VISUAL: CTA FINAL SUPER COMPACTO */}
+      <section className="w-full bg-blue-950 text-white relative overflow-hidden py-6 sm:py-7 mt-10 sm:mt-14 border-t border-blue-900/60">
+        {/* Efeitos de iluminação sutil de fundo */}
+        <div className="absolute top-0 right-1/4 w-60 h-60 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-8">
             
-            <div className="space-y-3 text-center lg:text-left max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-semibold">
-                <Sparkles className="w-3.5 h-3.5" />
+            <div className="space-y-1.5 text-center lg:text-left max-w-2xl">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-emerald-300 text-[10px] font-semibold backdrop-blur-xs border border-white/10">
+                <Sparkles className="w-3 h-3 text-emerald-400" />
                 <span>Comece hoje sem riscos</span>
               </div>
 
-              <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight leading-tight">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight leading-snug">
                 Pronto para transformar a gestão da sua escola?
               </h2>
 
-              <p className="text-xs sm:text-sm text-blue-200 leading-relaxed">
+              <p className="text-xs text-blue-200 leading-relaxed max-w-xl">
                 Teste o Educar360 por 14 dias, sem cartão de crédito, e descubra como é fácil gerenciar sua instituição com mais tecnologia, segurança e tranquilidade.
               </p>
             </div>
 
-            <div className="flex flex-col items-center gap-2 shrink-0">
+            <div className="flex flex-col items-center gap-1.5 shrink-0 w-full sm:w-auto">
               <a
                 href="#trial-form"
-                className="px-8 py-4 rounded-xl font-bold text-base text-white bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/30 transition-all flex items-center gap-2 hover:scale-105"
+                className="w-full sm:w-auto px-7 py-3 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 hover:scale-[1.02] cursor-pointer"
               >
                 <span>Testar Grátis por 14 dias</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
               </a>
-              <span className="text-[11px] text-blue-300">
+              <span className="text-[10px] text-blue-300">
                 Sem cartão de crédito · Cancelamento a qualquer momento
               </span>
             </div>
@@ -806,6 +809,141 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* 12. FOOTER COMPLETO E PROFISSIONAL DA LANDING PAGE */}
+      <footer className="w-full bg-slate-900 text-slate-300 border-t border-slate-800/90 pt-16 pb-12">
+        <div className="max-w-7xl mx-auto px-6 space-y-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
+            
+            {/* Coluna Institucional / Logo */}
+            <div className="lg:col-span-2 space-y-5">
+              <Link href="/" className="inline-block bg-white rounded-xl p-2.5 shadow-sm">
+                <Image
+                  src="/images/landing/logoh.png"
+                  alt="Educar360 - Gestão escolar sem limites"
+                  width={160}
+                  height={40}
+                  className="h-9 w-auto object-contain"
+                />
+              </Link>
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
+                Plataforma de gestão escolar completa e moderna para escolas e redes de ensino que buscam organização, eficiência pedagógica e crescimento sustentável.
+              </p>
+              <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20 w-fit">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Dados Seguros · Em conformidade com a LGPD</span>
+              </div>
+            </div>
+
+            {/* Coluna Navegação */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Navegação
+              </h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+                <li>
+                  <Link href="/" className="hover:text-white transition-colors">
+                    Início
+                  </Link>
+                </li>
+                <li>
+                  <a href="#modulos" className="hover:text-white transition-colors">
+                    Soluções
+                  </a>
+                </li>
+                <li>
+                  <a href="#planos" className="hover:text-white transition-colors">
+                    Planos
+                  </a>
+                </li>
+                <li>
+                  <a href="#diferenciais" className="hover:text-white transition-colors">
+                    Diferenciais
+                  </a>
+                </li>
+                <li>
+                  <a href="#faq" className="hover:text-white transition-colors">
+                    FAQ
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Coluna Soluções */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Soluções
+              </h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+                <li>
+                  <a href="#modulos" className="hover:text-white transition-colors">
+                    Secretaria Escolar
+                  </a>
+                </li>
+                <li>
+                  <a href="#modulos" className="hover:text-white transition-colors">
+                    Gestão Acadêmica
+                  </a>
+                </li>
+                <li>
+                  <a href="#modulos" className="hover:text-white transition-colors">
+                    Financeiro & Mensalidades
+                  </a>
+                </li>
+                <li>
+                  <a href="#modulos" className="hover:text-white transition-colors">
+                    Portal da Família & Aluno
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Coluna Acesso & Contato */}
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Acesso ao Sistema
+              </h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm text-slate-400">
+                <li>
+                  <Link href="/app/login" className="text-emerald-400 font-semibold hover:text-emerald-300 transition-colors flex items-center gap-1">
+                    <span>Área da Escola</span>
+                    <span>→</span>
+                  </Link>
+                </li>
+                <li>
+                  <a href="#trial-form" className="hover:text-white transition-colors">
+                    Iniciar Teste de 14 Dias
+                  </a>
+                </li>
+                <li>
+                  <a href="#faq" className="hover:text-white transition-colors">
+                    Central de Dúvidas
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+          </div>
+
+          {/* Linha inferior de Copyright e Termos Legais */}
+          <div className="border-t border-slate-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <p>
+              &copy; {new Date().getFullYear()} Educar360. Todos os direitos reservados.
+            </p>
+            <div className="flex items-center gap-6">
+              <a href="#faq" className="hover:text-slate-300 transition-colors">
+                Política de Privacidade
+              </a>
+              <span>•</span>
+              <a href="#faq" className="hover:text-slate-300 transition-colors">
+                Termos de Uso
+              </a>
+              <span>•</span>
+              <span className="text-emerald-400 font-medium">Educação que transforma futuros</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

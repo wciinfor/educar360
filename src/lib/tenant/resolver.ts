@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { AuthenticatedTenantSession } from "@/types/tenant";
 import { Tenant, TenantUser, Profile, UserRole } from "@/types/database";
 import { cookies } from "next/headers";
@@ -73,9 +73,9 @@ export async function getTenantSession(): Promise<AuthenticatedTenantSession | n
 
   const tenantUsers = tenantUsersData as unknown as TenantUserWithTenant[];
 
-  // Lista formatada de tenants disponíveis para o usuário
+  // Lista formatada de tenants disponíveis para o usuário (ativos ou em trial de 14 dias)
   const allUserTenants = tenantUsers
-    .filter((tu) => tu.tenant && tu.tenant.status === "active")
+    .filter((tu) => tu.tenant && (tu.tenant.status === "active" || tu.tenant.status === "trial"))
     .map((tu) => ({
       tenant: tu.tenant,
       role: tu.role as UserRole,
@@ -91,13 +91,17 @@ export async function getTenantSession(): Promise<AuthenticatedTenantSession | n
 
   // Seleciona o tenant ativo (ou pelo cookie salvo, ou o primeiro disponível)
   let activeTenantUser = tenantUsers.find(
-    (tu) => tu.tenant_id === preferredTenantId && tu.tenant && tu.tenant.status === "active"
+    (tu) =>
+      tu.tenant_id === preferredTenantId &&
+      tu.tenant &&
+      (tu.tenant.status === "active" || tu.tenant.status === "trial")
   );
 
   if (!activeTenantUser) {
-    activeTenantUser = tenantUsers.find(
-      (tu) => tu.tenant && tu.tenant.status === "active"
-    ) || tenantUsers[0];
+    activeTenantUser =
+      tenantUsers.find(
+        (tu) => tu.tenant && (tu.tenant.status === "active" || tu.tenant.status === "trial")
+      ) || tenantUsers[0];
   }
 
   if (!activeTenantUser || !activeTenantUser.tenant) {

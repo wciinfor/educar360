@@ -36,6 +36,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [onboardResult, setOnboardResult] = useState<any>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,33 +46,65 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
     const result = await submitLeadAction(formData);
 
     if (result.success) {
+      setOnboardResult(result);
       setSubmitted(true);
     } else {
-      setErrorMsg(result.message || "Erro ao enviar solicitação.");
+      setErrorMsg(result.message || "Erro ao processar criação da escola.");
     }
     setLoading(false);
   };
 
-  if (submitted) {
+  if (submitted && onboardResult) {
     return (
-      <div className="bg-white border border-emerald-200 rounded-3xl p-8 sm:p-12 text-center space-y-6 shadow-xl shadow-emerald-500/5">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
-          <CheckCircle2 className="w-10 h-10" />
+      <div className="bg-white border border-emerald-200 rounded-3xl p-8 sm:p-12 text-center space-y-6 shadow-2xl shadow-emerald-500/10 relative overflow-hidden">
+        <div className="w-20 h-20 rounded-3xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+          <CheckCircle2 className="w-12 h-12" />
         </div>
-        <div className="space-y-3">
-          <h3 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            Solicitação Recebida com Sucesso!
+        
+        <div className="space-y-3 max-w-xl mx-auto">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>14 Dias Grátis Ativados</span>
+          </div>
+
+          <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Sua escola foi criada com sucesso!
           </h3>
-          <p className="text-sm sm:text-base text-slate-600 max-w-lg mx-auto leading-relaxed">
-            Nossa equipe técnica e comercial já registrou os dados da instituição{" "}
-            <strong className="text-slate-900 font-semibold">{formData.school_name}</strong>. Em breve você receberá as credenciais e o link de acesso ao seu ambiente isolado de testes.
+
+          <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+            Parabéns! O ambiente exclusivo da instituição{" "}
+            <strong className="text-slate-900 font-bold">{formData.school_name}</strong> já está configurado e pronto para uso.
           </p>
         </div>
-        <div className="pt-3">
+
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 max-w-lg mx-auto text-left space-y-3">
+          <div className="flex items-start gap-3">
+            <Mail className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-xs sm:text-sm">
+              <p className="font-semibold text-slate-800">Convite de ativação enviado para:</p>
+              <p className="text-blue-600 font-mono font-medium">{formData.email}</p>
+            </div>
+          </div>
+          <p className="text-[12px] text-slate-500 leading-normal pl-8 border-t border-slate-200/60 pt-2">
+            Verifique sua caixa de entrada (ou pasta de spam/promoções) para criar sua senha de acesso. Não é necessário cartão de crédito.
+          </p>
+        </div>
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onboardResult.activation_url && (
+            <a
+              href={onboardResult.activation_url}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-white bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 hover:scale-[1.02]"
+            >
+              <span>Ativar meu acesso agora</span>
+              <span>→</span>
+            </a>
+          )}
           <button
             type="button"
             onClick={() => {
               setSubmitted(false);
+              setOnboardResult(null);
               setFormData({
                 school_name: "",
                 contact_name: "",
@@ -83,9 +116,9 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
                 message: "",
               });
             }}
-            className="px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
+            className="w-full sm:w-auto px-6 py-3 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
-            Enviar outra solicitação
+            Cadastrar outra instituição
           </button>
         </div>
       </div>

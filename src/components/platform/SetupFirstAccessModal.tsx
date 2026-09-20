@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { setupTenantFirstAdminAction } from "@/app/actions/admin-first-access";
+import { getActivationUrl } from "@/lib/urls";
 import {
   UserPlus,
   Mail,
@@ -83,9 +84,7 @@ export function SetupFirstAccessModal({
 
   const copyInviteLink = () => {
     if (!createdAdmin) return;
-    const link = `https://${createdAdmin.access_domain}/login?invite=${createdAdmin.invite_token}&email=${encodeURIComponent(
-      createdAdmin.admin_email
-    )}`;
+    const link = getActivationUrl(createdAdmin.invite_token, createdAdmin.admin_email);
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
