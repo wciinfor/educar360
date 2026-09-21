@@ -1,4 +1,4 @@
-﻿import { UserRole } from "@/types/database";
+import { UserRole } from "@/types/database";
 
 export type SchoolModule =
   | "dashboard"
@@ -66,6 +66,26 @@ export const ROLE_DEFINITIONS: Record<UserRole, RoleConfig> = {
       "dashboard",
       "matriculas",
       "financeiro",
+      "comunicacao",
+    ],
+  },
+  comercial: {
+    role: "comercial",
+    label: "Equipe Comercial",
+    description: "Prospecção, conversão de novos alunos, captação e matrículas.",
+    allowedModules: [
+      "dashboard",
+      "matriculas",
+      "comunicacao",
+    ],
+  },
+  recepcao: {
+    role: "recepcao",
+    label: "Recepção / Atendimento",
+    description: "Atendimento inicial aos pais, visitantes e triagem na secretaria escolar.",
+    allowedModules: [
+      "dashboard",
+      "secretaria",
       "comunicacao",
     ],
   },

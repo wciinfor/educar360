@@ -3,19 +3,10 @@ import { getTenantSession } from "@/lib/tenant/resolver";
 import { canAccessModule } from "@/lib/rbac/permissions";
 import { redirect } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import {
-  getEnrollmentsAction,
-  getEnrollmentLookupDataAction,
-  getInstitutionChecklistSettingsAction,
-} from "@/app/actions/matriculas";
-import {
-  getCoursesAction,
-  getSeriesAction,
-  getSchoolClassesAction,
-} from "@/app/actions/academico";
-import { MatriculasClient } from "@/components/matriculas/MatriculasClient";
+import { getEnrollmentsAction } from "@/app/actions/matriculas";
+import { MatriculasReportsClient } from "@/components/matriculas/MatriculasReportsClient";
 
-export default async function Page() {
+export default async function MatriculasReportsPage() {
   const session = await getTenantSession();
 
   if (!session) {
@@ -31,37 +22,29 @@ export default async function Page() {
         </div>
         <h2 className="text-lg font-bold text-slate-900">Acesso Restrito ao Módulo</h2>
         <p className="text-sm text-slate-600">
-          O seu perfil (<strong>{session.role}</strong>) não possui permissão para acessar o módulo <strong>Matrículas</strong> nesta instituição escolar.
+          O seu perfil (<strong>{session.role}</strong>) não possui permissão para acessar os relatórios do módulo <strong>Matrículas</strong> nesta instituição escolar.
         </p>
       </div>
     );
   }
 
-  const [enrollmentsRes, lookupRes, checklistRes, coursesRes, seriesRes, classesRes] =
-    await Promise.all([
-      getEnrollmentsAction({ status: "all" }),
-      getEnrollmentLookupDataAction(),
-      getInstitutionChecklistSettingsAction(),
-      getCoursesAction(),
-      getSeriesAction(),
-      getSchoolClassesAction(),
-    ]);
+  // Carrega inicialmente todas as matrículas e estrutura acadêmica para geração dos relatórios
+  const [enrollmentsRes, coursesRes, seriesRes, classesRes] = await Promise.all([
+    getEnrollmentsAction({ status: "all" }),
+    import("@/app/actions/academico").then((m) => m.getCoursesAction()),
+    import("@/app/actions/academico").then((m) => m.getSeriesAction()),
+    import("@/app/actions/academico").then((m) => m.getSchoolClassesAction()),
+  ]);
 
-  const enrollments = enrollmentsRes.success ? enrollmentsRes.data : [];
-  const students = lookupRes.success ? lookupRes.students : [];
-  const guardians = lookupRes.success ? lookupRes.guardians : [];
-  const checklistTemplates = checklistRes.success ? checklistRes.templates : [];
+  const initialEnrollments = enrollmentsRes.success ? enrollmentsRes.data : [];
   const courses = coursesRes.success ? coursesRes.courses : [];
   const series = seriesRes.success ? seriesRes.series : [];
   const schoolClasses = classesRes.success ? classesRes.schoolClasses : [];
 
   return (
     <div className="max-w-7xl mx-auto">
-      <MatriculasClient
-        initialEnrollments={enrollments}
-        existingStudents={students}
-        existingGuardians={guardians}
-        initialChecklistTemplates={checklistTemplates}
+      <MatriculasReportsClient
+        initialEnrollments={initialEnrollments}
         courses={courses}
         seriesList={series}
         schoolClasses={schoolClasses}
@@ -71,5 +54,4 @@ export default async function Page() {
     </div>
   );
 }
-
 

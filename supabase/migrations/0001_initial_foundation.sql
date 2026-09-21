@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- EDUCAR360 - FUNDAÇÃO MULTI-TENANT, AUTENTICAÇÃO, RBAC E AUDITORIA
 -- ==============================================================================
 -- Regra central: Cada tenant representa UMA única instituição escolar.
@@ -149,6 +149,7 @@ $$;
 -- A) Tenants
 ALTER TABLE public.tenants ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "tenants_select_policy" ON public.tenants;
 CREATE POLICY "tenants_select_policy"
 ON public.tenants
 FOR SELECT
@@ -157,6 +158,7 @@ USING (
     OR id IN (SELECT get_auth_tenant_ids())
 );
 
+DROP POLICY IF EXISTS "tenants_update_policy" ON public.tenants;
 CREATE POLICY "tenants_update_policy"
 ON public.tenants
 FOR UPDATE
@@ -172,6 +174,8 @@ WITH CHECK (
 -- B) Profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "profiles_select_own_or_same_tenant" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
 CREATE POLICY "profiles_select_own_or_same_tenant"
 ON public.profiles
 FOR SELECT
@@ -188,6 +192,7 @@ USING (
     )
 );
 
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
 CREATE POLICY "profiles_update_own"
 ON public.profiles
 FOR UPDATE
@@ -197,6 +202,7 @@ WITH CHECK (id = auth.uid());
 -- C) Tenant Users
 ALTER TABLE public.tenant_users ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "tenant_users_select_policy" ON public.tenant_users;
 CREATE POLICY "tenant_users_select_policy"
 ON public.tenant_users
 FOR SELECT
@@ -205,6 +211,7 @@ USING (
     OR tenant_id IN (SELECT get_auth_tenant_ids())
 );
 
+DROP POLICY IF EXISTS "tenant_users_admin_write_policy" ON public.tenant_users;
 CREATE POLICY "tenant_users_admin_write_policy"
 ON public.tenant_users
 FOR ALL
@@ -226,6 +233,7 @@ WITH CHECK (
 -- D) Audit Logs
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "audit_logs_select_policy" ON public.audit_logs;
 CREATE POLICY "audit_logs_select_policy"
 ON public.audit_logs
 FOR SELECT
@@ -237,6 +245,7 @@ USING (
     )
 );
 
+DROP POLICY IF EXISTS "audit_logs_insert_policy" ON public.audit_logs;
 CREATE POLICY "audit_logs_insert_policy"
 ON public.audit_logs
 FOR INSERT

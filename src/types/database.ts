@@ -11,6 +11,8 @@ export type UserRole =
   | 'coordenacao'
   | 'secretaria'
   | 'financeiro'
+  | 'comercial'
+  | 'recepcao'
   | 'professor'
   | 'responsavel'
   | 'aluno';

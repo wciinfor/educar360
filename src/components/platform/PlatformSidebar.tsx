@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -32,24 +32,43 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Auditoria Global", href: "/admin/auditoria", icon: History },
 ];
 
-export function PlatformSidebar() {
+interface PlatformSidebarProps {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function PlatformSidebar({ mobileOpen = false, onClose }: PlatformSidebarProps) {
   const pathname = usePathname();
 
-  return (
-    <aside className="w-64 bg-zinc-950 text-zinc-100 flex flex-col shrink-0 border-r border-zinc-800 select-none">
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-zinc-950 text-zinc-100 select-none">
       {/* Brand Header */}
-      <div className="h-16 flex items-center gap-3 px-5 border-b border-zinc-800 bg-zinc-900/50">
-        <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold shadow-md shadow-emerald-600/30">
-          <Server className="w-5 h-5" />
+      <div className="h-16 flex items-center justify-between px-5 border-b border-zinc-800 bg-zinc-900/50">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold shadow-md shadow-emerald-600/30 shrink-0">
+            <Server className="w-5 h-5" />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-semibold tracking-wide text-white leading-tight truncate">
+              Educar360 Cloud
+            </span>
+            <span className="text-[11px] text-emerald-400 font-mono truncate">
+              admin.educar360.com.br
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-sm font-semibold tracking-wide text-white leading-tight truncate">
-            Educar360 Cloud
-          </span>
-          <span className="text-[11px] text-emerald-400 font-mono truncate">
-            admin.educar360.com.br
-          </span>
-        </div>
+
+        {/* Botão de fechar no mobile */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            title="Fechar menu"
+          >
+            <span className="text-lg leading-none font-bold">✕</span>
+          </button>
+        )}
       </div>
 
       {/* Navigation Links */}
@@ -66,6 +85,9 @@ export function PlatformSidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={() => {
+                if (onClose) onClose();
+              }}
               className={clsx(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 isActive
@@ -92,6 +114,30 @@ export function PlatformSidebar() {
           </div>
         </div>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Sidebar fixo para Desktop (lg+) */}
+      <aside className="hidden lg:flex w-64 shrink-0 border-r border-zinc-800 h-full">
+        {sidebarContent}
+      </aside>
+
+      {/* Drawer Mobile (< lg) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          {/* Backdrop escuro com blur */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={onClose}
+          />
+          {/* Painel do Sidebar Deslizante */}
+          <aside className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 flex flex-col border-r border-zinc-800">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

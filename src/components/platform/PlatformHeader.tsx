@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -9,14 +9,16 @@ import {
   LogOut,
   User,
   Sparkles,
+  Menu,
 } from "lucide-react";
 
 interface PlatformHeaderProps {
   userEmail: string;
   userName: string;
+  onOpenMobileMenu?: () => void;
 }
 
-export function PlatformHeader({ userEmail, userName }: PlatformHeaderProps) {
+export function PlatformHeader({ userEmail, userName, onOpenMobileMenu }: PlatformHeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -28,11 +30,22 @@ export function PlatformHeader({ userEmail, userName }: PlatformHeaderProps) {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-zinc-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-      <div className="flex items-center gap-2">
+    <header className="h-16 bg-white border-b border-zinc-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+      <div className="flex items-center gap-3">
+        {onOpenMobileMenu && (
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            className="lg:hidden p-2 rounded-lg text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors"
+            title="Abrir navegação"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
           <Sparkles className="w-3.5 h-3.5" />
-          Plataforma Multi-Tenant Ativa
+          <span className="hidden sm:inline">Plataforma Multi-Tenant Ativa</span>
+          <span className="sm:hidden">Multi-Tenant</span>
         </span>
       </div>
 
