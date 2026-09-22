@@ -17,6 +17,8 @@ async function assertSecretariaAccess() {
   return session;
 }
 
+import { normalizeCpf, isValidCpf } from "@/lib/utils/cpf";
+
 // ==============================================================================
 // 1. ALUNOS
 // ==============================================================================
@@ -102,11 +104,41 @@ export async function saveStudentAction(
     const session = await assertSecretariaAccess();
     const supabase = await createClient();
 
+    let formattedStudentCpf: string | null = null;
+    if (input.cpf && input.cpf.trim()) {
+      const cleanCpf = input.cpf.trim().replace(/\D/g, "");
+      if (cleanCpf) {
+        if (!isValidCpf(cleanCpf)) {
+          return { success: false, error: "O CPF do aluno informado é inválido. Verifique os dígitos digitados." };
+        }
+        formattedStudentCpf = normalizeCpf(cleanCpf);
+
+        // Validação estrita de unicidade de CPF no tenant
+        let checkQuery = (supabase.from("students") as any)
+          .select("id, full_name, first_name, last_name, cpf")
+          .eq("tenant_id", session.tenant.id)
+          .or(`cpf.eq.${formattedStudentCpf},cpf.eq.${cleanCpf}`);
+
+        if (studentId) {
+          checkQuery = checkQuery.neq("id", studentId);
+        }
+
+        const { data: existingStd, error: checkErr } = await checkQuery.maybeSingle();
+        if (existingStd) {
+          const stdName = existingStd.full_name || `${existingStd.first_name} ${existingStd.last_name}`.trim();
+          return {
+            success: false,
+            error: `Não é possível cadastrar: já existe um aluno cadastrado com este CPF (${formattedStudentCpf}): "${stdName}".`,
+          };
+        }
+      }
+    }
+
     const studentData: Record<string, any> = {
       tenant_id: session.tenant.id,
       first_name: input.first_name.trim(),
       last_name: input.last_name.trim(),
-      cpf: input.cpf?.trim() || null,
+      cpf: formattedStudentCpf,
       rg: input.rg?.trim() || null,
       rg_issuer: input.rg_issuer?.trim() || null,
       birth_date: input.birth_date || null,
@@ -244,10 +276,41 @@ export async function saveGuardianAction(
     const session = await assertSecretariaAccess();
     const supabase = await createClient();
 
+    const rawCpf = input.cpf ? input.cpf.trim() : "";
+    const cleanCpf = rawCpf.replace(/\D/g, "");
+
+    if (!cleanCpf) {
+      return { success: false, error: "CPF do responsável é obrigatório." };
+    }
+
+    if (!isValidCpf(cleanCpf)) {
+      return { success: false, error: "O CPF informado é inválido. Verifique os dígitos digitados." };
+    }
+
+    const formattedGuardianCpf = normalizeCpf(cleanCpf);
+
+    // Validação estrita de unicidade de CPF no tenant
+    let dupQuery = (supabase.from("guardians") as any)
+      .select("id, name, cpf")
+      .eq("tenant_id", session.tenant.id)
+      .or(`cpf.eq.${formattedGuardianCpf},cpf.eq.${cleanCpf}`);
+
+    if (guardianId) {
+      dupQuery = dupQuery.neq("id", guardianId);
+    }
+
+    const { data: existingGrd, error: checkErr } = await dupQuery.maybeSingle();
+    if (existingGrd) {
+      return {
+        success: false,
+        error: `Não é possível cadastrar: já existe um responsável com este CPF (${formattedGuardianCpf}) cadastrado como "${existingGrd.name}".`,
+      };
+    }
+
     const guardianData: Record<string, any> = {
       tenant_id: session.tenant.id,
       name: input.name.trim(),
-      cpf: input.cpf.trim(),
+      cpf: formattedGuardianCpf,
       rg: input.rg?.trim() || null,
       kinship: input.kinship || "outro",
       phone: input.phone?.trim() || null,

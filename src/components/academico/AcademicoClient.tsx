@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Course, Series, SchoolClass, AcademicShift } from "@/types/academico";
 import {
   saveCourseAction,
@@ -54,11 +55,25 @@ export function AcademicoClient({
   userRole,
   schoolName,
 }: AcademicoClientProps) {
+  const router = useRouter();
+
   const [courses, setCourses] = useState<Course[]>(initialCourses);
   const [seriesList, setSeriesList] = useState<Series[]>(initialSeries);
   const [classesList, setClassesList] = useState<SchoolClass[]>(initialClasses);
 
-  const [activeTab, setActiveTab] = useState<TabType>("classes");
+  useEffect(() => {
+    setCourses(initialCourses);
+  }, [initialCourses]);
+
+  useEffect(() => {
+    setSeriesList(initialSeries);
+  }, [initialSeries]);
+
+  useEffect(() => {
+    setClassesList(initialClasses);
+  }, [initialClasses]);
+
+  const [activeTab, setActiveTab] = useState<TabType>("courses");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -99,11 +114,12 @@ export function AcademicoClient({
     setActionError(null);
     setActionSuccess(null);
     const res = await saveCourseAction(data as any);
-    if (!res.success) {
-      throw new Error(res.error);
+    if (!res.success || !res.id) {
+      throw new Error(res.error || "Erro ao salvar curso/segmento.");
     }
     setActionSuccess(data.id ? "Curso atualizado com sucesso!" : "Curso criado com sucesso!");
-    // Atualização otimista/local
+    const realCourseId = res.id;
+
     if (data.id) {
       setCourses((prev) =>
         prev.map((c) =>
@@ -116,7 +132,7 @@ export function AcademicoClient({
       setCourses((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: realCourseId,
           tenant_id: "",
           name: data.name,
           description: data.description || null,
@@ -127,6 +143,7 @@ export function AcademicoClient({
         },
       ]);
     }
+    router.refresh();
   };
 
   const handleDeleteCourse = async (course: Course) => {
@@ -142,6 +159,7 @@ export function AcademicoClient({
       } else {
         setCourses((prev) => prev.filter((c) => c.id !== course.id));
         setActionSuccess("Curso excluído com sucesso.");
+        router.refresh();
       }
     });
   };
@@ -158,10 +176,11 @@ export function AcademicoClient({
     setActionError(null);
     setActionSuccess(null);
     const res = await saveSeriesAction(data as any);
-    if (!res.success) {
-      throw new Error(res.error);
+    if (!res.success || !res.id) {
+      throw new Error(res.error || "Erro ao salvar série/ano escolar.");
     }
     setActionSuccess(data.id ? "Série atualizada com sucesso!" : "Série criada com sucesso!");
+    const realSeriesId = res.id;
     const linkedCourse = coursesMap.get(data.course_id);
 
     if (data.id) {
@@ -184,7 +203,7 @@ export function AcademicoClient({
       setSeriesList((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: realSeriesId,
           tenant_id: "",
           course_id: data.course_id,
           course: linkedCourse,
@@ -198,6 +217,7 @@ export function AcademicoClient({
         },
       ]);
     }
+    router.refresh();
   };
 
   const handleDeleteSeries = async (series: Series) => {
@@ -213,6 +233,7 @@ export function AcademicoClient({
       } else {
         setSeriesList((prev) => prev.filter((s) => s.id !== series.id));
         setActionSuccess("Série excluída com sucesso.");
+        router.refresh();
       }
     });
   };
@@ -230,10 +251,11 @@ export function AcademicoClient({
     setActionError(null);
     setActionSuccess(null);
     const res = await saveSchoolClassAction(data as any);
-    if (!res.success) {
-      throw new Error(res.error);
+    if (!res.success || !res.id) {
+      throw new Error(res.error || "Erro ao salvar turma.");
     }
     setActionSuccess(data.id ? "Turma atualizada com sucesso!" : "Turma criada com sucesso!");
+    const realClassId = res.id;
     const linkedSeries = seriesMap.get(data.series_id);
 
     if (data.id) {
@@ -257,7 +279,7 @@ export function AcademicoClient({
       setClassesList((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: realClassId,
           tenant_id: "",
           series_id: data.series_id,
           series: linkedSeries,
@@ -272,6 +294,7 @@ export function AcademicoClient({
         },
       ]);
     }
+    router.refresh();
   };
 
   const handleDeleteClass = async (schoolClass: SchoolClass) => {
@@ -287,6 +310,7 @@ export function AcademicoClient({
       } else {
         setClassesList((prev) => prev.filter((c) => c.id !== schoolClass.id));
         setActionSuccess("Turma excluída com sucesso.");
+        router.refresh();
       }
     });
   };
@@ -435,17 +459,17 @@ export function AcademicoClient({
       {/* Navegação de Abas */}
       <div className="flex border-b border-slate-200 gap-2">
         <button
-          onClick={() => setActiveTab("classes")}
+          onClick={() => setActiveTab("courses")}
           className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === "classes"
-              ? "border-blue-600 text-blue-600"
+            activeTab === "courses"
+              ? "border-indigo-600 text-indigo-600"
               : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          <Users className="w-4 h-4" />
-          Turmas Escolares
+          <BookOpen className="w-4 h-4" />
+          Cursos / Segmentos
           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-            {classesList.length}
+            {courses.length}
           </span>
         </button>
 
@@ -465,17 +489,17 @@ export function AcademicoClient({
         </button>
 
         <button
-          onClick={() => setActiveTab("courses")}
+          onClick={() => setActiveTab("classes")}
           className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all cursor-pointer ${
-            activeTab === "courses"
-              ? "border-indigo-600 text-indigo-600"
+            activeTab === "classes"
+              ? "border-blue-600 text-blue-600"
               : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          <BookOpen className="w-4 h-4" />
-          Cursos / Segmentos
+          <Users className="w-4 h-4" />
+          Turmas Escolares
           <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-            {courses.length}
+            {classesList.length}
           </span>
         </button>
       </div>

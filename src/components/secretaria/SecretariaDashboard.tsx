@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Student, Guardian } from "@/types/secretaria";
 import { StudentModal } from "./StudentModal";
 import { GuardianModal } from "./GuardianModal";
@@ -17,7 +18,9 @@ import {
   CheckCircle2,
   XCircle,
   UserX,
+  Printer,
 } from "lucide-react";
+import { printStudentCard } from "@/lib/utils/studentPdf";
 
 interface SecretariaDashboardProps {
   initialStudents: Student[];
@@ -30,6 +33,9 @@ export function SecretariaDashboard({
   initialGuardians,
   tenantName,
 }: SecretariaDashboardProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
   const [activeTab, setActiveTab] = useState<"students" | "guardians">("students");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
@@ -71,15 +77,23 @@ export function SecretariaDashboard({
 
   async function handleToggleStudentStatus(id: string, current: boolean) {
     if (confirm("Deseja alterar o status deste aluno?")) {
-      await toggleStudentStatusAction(id, !current);
-      window.location.reload();
+      const res = await toggleStudentStatusAction(id, !current);
+      if (res.success) {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
     }
   }
 
   async function handleToggleGuardianStatus(id: string, current: boolean) {
     if (confirm("Deseja alterar o status deste responsável?")) {
-      await toggleGuardianStatusAction(id, !current);
-      window.location.reload();
+      const res = await toggleGuardianStatusAction(id, !current);
+      if (res.success) {
+        startTransition(() => {
+          router.refresh();
+        });
+      }
     }
   }
 
@@ -417,14 +431,22 @@ export function SecretariaDashboard({
         isOpen={isStudentModalOpen}
         onClose={() => setIsStudentModalOpen(false)}
         studentToEdit={studentToEdit}
-        onSaved={() => window.location.reload()}
+        onSaved={() => {
+          startTransition(() => {
+            router.refresh();
+          });
+        }}
       />
 
       <GuardianModal
         isOpen={isGuardianModalOpen}
         onClose={() => setIsGuardianModalOpen(false)}
         guardianToEdit={guardianToEdit}
-        onSaved={() => window.location.reload()}
+        onSaved={() => {
+          startTransition(() => {
+            router.refresh();
+          });
+        }}
       />
 
       {viewingStudent && (
@@ -435,13 +457,16 @@ export function SecretariaDashboard({
                 <h3 className="text-lg font-bold text-slate-900">Ficha Cadastral do Aluno</h3>
                 <p className="text-xs text-slate-500">Documento interno da secretaria escolar</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setViewingStudent(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingStudent(null)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                  title="Fechar Ficha"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-slate-600">
@@ -528,11 +553,19 @@ export function SecretariaDashboard({
               )}
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+            <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => printStudentCard(viewingStudent, tenantName)}
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Gerar PDF / Imprimir
+              </button>
               <button
                 type="button"
                 onClick={() => setViewingStudent(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
               >
                 Fechar Ficha
               </button>

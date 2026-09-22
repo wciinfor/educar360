@@ -223,8 +223,8 @@ export interface EnrollmentFilters {
 
 export interface CreateEnrollmentInput {
   // Aluno
-  isExistingStudent: boolean;
-  studentId?: string;
+  isExistingStudent?: boolean;
+  studentId: string;
   newStudent?: {
     first_name: string;
     last_name: string;
@@ -236,7 +236,7 @@ export interface CreateEnrollmentInput {
   };
 
   // Responsável
-  isExistingGuardian: boolean;
+  isExistingGuardian?: boolean;
   guardianId?: string;
   newGuardian?: {
     name: string;

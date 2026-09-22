@@ -23,6 +23,7 @@ import {
 } from "@/types/matriculas";
 import { Student, Guardian } from "@/types/secretaria";
 import { SchoolClass, Course, Series } from "@/types/academico";
+import { normalizeCpf, isValidCpf } from "@/lib/utils/cpf";
 
 // ==============================================================================
 // 0. GUARDIÃO DE ACESSO & RBAC GRANULAR
@@ -681,53 +682,31 @@ export async function createEnrollmentAction(
       effectiveInitialStatus = "em_analise";
     }
 
-    let studentId: string | null = null;
+    let studentId: string;
     let guardianId: string | null = null;
 
-    // --- Passo 1: Aluno (Reutilização ou Criação) ---
-    if (input.isExistingStudent && input.studentId) {
-      // Valida se o estudante pertence ao tenant atual (Isolamento RLS)
-      const { data: stdCheck } = await (supabase.from("students") as any)
-        .select("id")
-        .eq("id", input.studentId)
-        .eq("tenant_id", session.tenant.id)
-        .single();
-
-      if (!stdCheck) {
-        return { success: false, error: "Aluno selecionado não pertence à sua instituição." };
-      }
-      studentId = input.studentId;
-    } else if (input.newStudent) {
-      if (!input.newStudent.first_name.trim() || !input.newStudent.last_name.trim()) {
-        return { success: false, error: "Nome e sobrenome do aluno são obrigatórios." };
-      }
-
-      const { data: newStd, error: stdErr } = await (supabase.from("students") as any)
-        .insert([
-          {
-            tenant_id: session.tenant.id,
-            first_name: input.newStudent.first_name.trim(),
-            last_name: input.newStudent.last_name.trim(),
-            cpf: input.newStudent.cpf?.trim() || null,
-            birth_date: input.newStudent.birth_date || null,
-            gender: input.newStudent.gender || "uninformed",
-            email: input.newStudent.email?.trim().toLowerCase() || null,
-            phone: input.newStudent.phone?.trim() || null,
-            is_active: effectiveInitialStatus === "matriculado",
-          },
-        ])
-        .select("id")
-        .single();
-
-      if (stdErr || !newStd) {
-        return { success: false, error: stdErr?.message || "Erro ao cadastrar novo aluno." };
-      }
-      studentId = newStd.id;
+    // --- Passo 1: Aluno (Exige aluno previamente cadastrado na Secretaria) ---
+    if (!input.studentId || !input.studentId.trim()) {
+      return {
+        success: false,
+        error: "É obrigatório selecionar um aluno já cadastrado na Secretaria para realizar a matrícula.",
+      };
     }
 
-    if (!studentId) {
-      return { success: false, error: "Identificação do aluno não fornecida." };
+    // Valida se o estudante pertence ao tenant atual (Isolamento RLS e multi-tenant)
+    const { data: stdCheck, error: stdCheckErr } = await (supabase.from("students") as any)
+      .select("id, first_name, last_name, full_name, is_active")
+      .eq("id", input.studentId.trim())
+      .eq("tenant_id", session.tenant.id)
+      .single();
+
+    if (stdCheckErr || !stdCheck) {
+      return {
+        success: false,
+        error: "Aluno selecionado não foi encontrado ou não pertence à sua instituição de ensino.",
+      };
     }
+    studentId = stdCheck.id;
 
     // --- Passo 2: Responsável (Reutilização ou Criação) ---
     if (input.isExistingGuardian && input.guardianId) {
@@ -755,30 +734,50 @@ export async function createEnrollmentAction(
         },
       ]);
     } else if (input.newGuardian && input.newGuardian.name.trim()) {
-      if (!input.newGuardian.cpf?.trim()) {
+      const rawGrdCpf = input.newGuardian.cpf ? input.newGuardian.cpf.trim() : "";
+      const cleanGrdCpf = rawGrdCpf.replace(/\D/g, "");
+
+      if (!cleanGrdCpf) {
         return { success: false, error: "CPF do responsável é obrigatório." };
       }
 
-      const { data: newGrd, error: grdErr } = await (supabase.from("guardians") as any)
-        .insert([
-          {
-            tenant_id: session.tenant.id,
-            name: input.newGuardian.name.trim(),
-            cpf: input.newGuardian.cpf.trim(),
-            kinship: input.newGuardian.kinship || "outro",
-            phone: input.newGuardian.phone?.trim() || null,
-            email: input.newGuardian.email?.trim().toLowerCase() || null,
-            is_financial_responsible: true,
-            is_pedagogical_responsible: true,
-          },
-        ])
-        .select("id")
-        .single();
-
-      if (grdErr || !newGrd) {
-        return { success: false, error: grdErr?.message || "Erro ao cadastrar novo responsável." };
+      if (!isValidCpf(cleanGrdCpf)) {
+        return { success: false, error: "O CPF do responsável informado é inválido. Verifique os dígitos digitados." };
       }
-      guardianId = newGrd.id;
+
+      const formattedGrdCpf = normalizeCpf(cleanGrdCpf);
+
+      // Reutiliza o responsável caso já exista pelo CPF no mesmo tenant
+      const { data: existingGrd } = await (supabase.from("guardians") as any)
+        .select("id, name")
+        .eq("tenant_id", session.tenant.id)
+        .or(`cpf.eq.${formattedGrdCpf},cpf.eq.${cleanGrdCpf}`)
+        .maybeSingle();
+
+      if (existingGrd) {
+        guardianId = existingGrd.id;
+      } else {
+        const { data: newGrd, error: grdErr } = await (supabase.from("guardians") as any)
+          .insert([
+            {
+              tenant_id: session.tenant.id,
+              name: input.newGuardian.name.trim(),
+              cpf: formattedGrdCpf,
+              kinship: input.newGuardian.kinship || "outro",
+              phone: input.newGuardian.phone?.trim() || null,
+              email: input.newGuardian.email?.trim().toLowerCase() || null,
+              is_financial_responsible: true,
+              is_pedagogical_responsible: true,
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (grdErr || !newGrd) {
+          return { success: false, error: grdErr?.message || "Erro ao cadastrar novo responsável." };
+        }
+        guardianId = newGrd.id;
+      }
 
       // Vincula na tabela associativa student_guardians
       await (supabase.from("student_guardians") as any).upsert([

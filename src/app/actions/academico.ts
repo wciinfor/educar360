@@ -100,7 +100,7 @@ export async function getCoursesAction(): Promise<{
 
 export async function saveCourseAction(
   input: CreateCourseInput | UpdateCourseInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const session = await assertAcademicAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
@@ -117,40 +117,58 @@ export async function saveCourseAction(
 
     // 1. Tenta gravar na tabela física public.courses
     let savedOnPhysical = false;
-    try {
-      if (isEdit) {
-        const { error } = await (supabase.from("courses") as any)
-          .update({
-            name,
-            description,
-            is_active: isActive,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", courseId)
-          .eq("tenant_id", session.tenant.id);
+    let isTableMissing = false;
 
-        if (!error) savedOnPhysical = true;
+    if (isEdit) {
+      const { error } = await (supabase.from("courses") as any)
+        .update({
+          name,
+          description,
+          is_active: isActive,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", courseId)
+        .eq("tenant_id", session.tenant.id);
+
+      if (error) {
+        if (error.code === "42P01" || error.message?.includes("does not exist")) {
+          isTableMissing = true;
+        } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_course_tenant_name")) {
+          return { success: false, error: "Já existe um curso cadastrado com este nome nesta instituição." };
+        } else {
+          return { success: false, error: error.message || "Erro ao atualizar curso no banco de dados." };
+        }
       } else {
-        const { error } = await (supabase.from("courses") as any).insert([
-          {
-            id: courseId,
-            tenant_id: session.tenant.id,
-            name,
-            description,
-            is_active: isActive,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
-
-        if (!error) savedOnPhysical = true;
+        savedOnPhysical = true;
       }
-    } catch {
-      // Ignora e utiliza fallback
+    } else {
+      const { error } = await (supabase.from("courses") as any).insert([
+        {
+          id: courseId,
+          tenant_id: session.tenant.id,
+          name,
+          description,
+          is_active: isActive,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        if (error.code === "42P01" || error.message?.includes("does not exist")) {
+          isTableMissing = true;
+        } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_course_tenant_name")) {
+          return { success: false, error: "Já existe um curso cadastrado com este nome nesta instituição." };
+        } else {
+          return { success: false, error: error.message || "Erro ao cadastrar curso no banco de dados." };
+        }
+      } else {
+        savedOnPhysical = true;
+      }
     }
 
-    // 2. Fallback JSONB store
-    if (!savedOnPhysical) {
+    // 2. Fallback JSONB store SOMENTE se a tabela física comprovadamente não existir (42P01)
+    if (isTableMissing && !savedOnPhysical) {
       const { data: curTenant } = await (supabase.from("tenants") as any)
         .select("settings")
         .eq("id", session.tenant.id)
@@ -211,7 +229,7 @@ export async function saveCourseAction(
     ]);
 
     revalidatePath("/app/academico");
-    return { success: true };
+    return { success: true, id: courseId };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao salvar curso/segmento." };
   }
@@ -381,7 +399,7 @@ export async function getSeriesAction(courseId?: string): Promise<{
 
 export async function saveSeriesAction(
   input: CreateSeriesInput | UpdateSeriesInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const session = await assertAcademicAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
@@ -402,44 +420,66 @@ export async function saveSeriesAction(
 
     // 1. Tenta gravar na tabela física
     let savedOnPhysical = false;
-    try {
-      if (isEdit) {
-        const { error } = await (supabase.from("series") as any)
-          .update({
-            course_id: input.course_id,
-            name,
-            description,
-            order_index: orderIndex,
-            is_active: isActive,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", seriesId)
-          .eq("tenant_id", session.tenant.id);
+    let isTableMissing = false;
 
-        if (!error) savedOnPhysical = true;
+    if (isEdit) {
+      const { error } = await (supabase.from("series") as any)
+        .update({
+          course_id: input.course_id,
+          name,
+          description,
+          order_index: orderIndex,
+          is_active: isActive,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", seriesId)
+        .eq("tenant_id", session.tenant.id);
+
+      if (error) {
+        if (error.code === "42P01" || error.message?.includes("does not exist")) {
+          isTableMissing = true;
+        } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("course_id")) {
+          return { success: false, error: "O curso selecionado não foi encontrado no banco de dados. Recarregue a página e tente novamente." };
+        } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_series_course_name")) {
+          return { success: false, error: "Já existe uma série com este nome cadastrada para este curso/segmento." };
+        } else {
+          return { success: false, error: error.message || "Erro ao atualizar série no banco de dados." };
+        }
       } else {
-        const { error } = await (supabase.from("series") as any).insert([
-          {
-            id: seriesId,
-            tenant_id: session.tenant.id,
-            course_id: input.course_id,
-            name,
-            description,
-            order_index: orderIndex,
-            is_active: isActive,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
-
-        if (!error) savedOnPhysical = true;
+        savedOnPhysical = true;
       }
-    } catch {
-      // Fallback
+    } else {
+      const { error } = await (supabase.from("series") as any).insert([
+        {
+          id: seriesId,
+          tenant_id: session.tenant.id,
+          course_id: input.course_id,
+          name,
+          description,
+          order_index: orderIndex,
+          is_active: isActive,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        if (error.code === "42P01" || error.message?.includes("does not exist")) {
+          isTableMissing = true;
+        } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("course_id")) {
+          return { success: false, error: "O curso selecionado não foi encontrado no banco de dados. Recarregue a página e tente novamente." };
+        } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_series_course_name")) {
+          return { success: false, error: "Já existe uma série com este nome cadastrada para este curso/segmento." };
+        } else {
+          return { success: false, error: error.message || "Erro ao cadastrar série no banco de dados." };
+        }
+      } else {
+        savedOnPhysical = true;
+      }
     }
 
-    // 2. Fallback JSONB store
-    if (!savedOnPhysical) {
+    // 2. Fallback JSONB store SOMENTE se a tabela física comprovadamente não existir (42P01)
+    if (isTableMissing && !savedOnPhysical) {
       const { data: curTenant } = await (supabase.from("tenants") as any)
         .select("settings")
         .eq("id", session.tenant.id)
@@ -510,7 +550,7 @@ export async function saveSeriesAction(
     ]);
 
     revalidatePath("/app/academico");
-    return { success: true };
+    return { success: true, id: seriesId };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao salvar série/ano escolar." };
   }
@@ -698,7 +738,7 @@ export async function getSchoolClassesAction(filters?: {
 
 export async function saveSchoolClassAction(
   input: CreateSchoolClassInput | UpdateSchoolClassInput
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
     const session = await assertAcademicAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
@@ -765,77 +805,99 @@ export async function saveSchoolClassAction(
 
     // 1. Tenta gravar na tabela física
     let savedOnPhysical = false;
-    try {
-      if (isEdit) {
-        // Tenta executar via RPC transacional atômica com lock FOR UPDATE na turma
-        let atomicExecuted = false;
-        try {
-          const { data: atomicRes, error: atomicErr } = await (supabase.rpc as any)(
-            "update_school_class_atomic",
-            {
-              p_tenant_id: session.tenant.id,
-              p_class_id: classId,
-              p_series_id: input.series_id,
-              p_name: name,
-              p_academic_year: academicYear,
-              p_shift: shift,
-              p_capacity: capacity,
-              p_is_active: isActive,
-            }
-          );
+    let isTableMissing = false;
 
-          if (!atomicErr && atomicRes) {
-            atomicExecuted = true;
-            if (!atomicRes.success) {
-              return { success: false, error: atomicRes.error || "Não foi possível atualizar a capacidade da turma." };
-            }
-            savedOnPhysical = true;
-          }
-        } catch {
-          atomicExecuted = false;
-        }
-
-        // Se a RPC ainda não existe no banco, executa fallback relacional
-        if (!atomicExecuted) {
-          const { error } = await (supabase.from("school_classes") as any)
-            .update({
-              series_id: input.series_id,
-              name,
-              academic_year: academicYear,
-              shift,
-              capacity,
-              is_active: isActive,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", classId)
-            .eq("tenant_id", session.tenant.id);
-
-          if (!error) savedOnPhysical = true;
-        }
-      } else {
-        const { error } = await (supabase.from("school_classes") as any).insert([
+    if (isEdit) {
+      // Tenta executar via RPC transacional atômica com lock FOR UPDATE na turma
+      let atomicExecuted = false;
+      try {
+        const { data: atomicRes, error: atomicErr } = await (supabase.rpc as any)(
+          "update_school_class_atomic",
           {
-            id: classId,
-            tenant_id: session.tenant.id,
+            p_tenant_id: session.tenant.id,
+            p_class_id: classId,
+            p_series_id: input.series_id,
+            p_name: name,
+            p_academic_year: academicYear,
+            p_shift: shift,
+            p_capacity: capacity,
+            p_is_active: isActive,
+          }
+        );
+
+        if (!atomicErr && atomicRes) {
+          atomicExecuted = true;
+          if (!atomicRes.success) {
+            return { success: false, error: atomicRes.error || "Não foi possível atualizar a capacidade da turma." };
+          }
+          savedOnPhysical = true;
+        }
+      } catch {
+        atomicExecuted = false;
+      }
+
+      // Se a RPC ainda não existe no banco, executa fallback relacional
+      if (!atomicExecuted) {
+        const { error } = await (supabase.from("school_classes") as any)
+          .update({
             series_id: input.series_id,
             name,
             academic_year: academicYear,
             shift,
             capacity,
             is_active: isActive,
-            created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          },
-        ]);
+          })
+          .eq("id", classId)
+          .eq("tenant_id", session.tenant.id);
 
-        if (!error) savedOnPhysical = true;
+        if (error) {
+          if (error.code === "42P01" || error.message?.includes("does not exist")) {
+            isTableMissing = true;
+          } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("series_id")) {
+            return { success: false, error: "A série selecionada não foi encontrada no banco de dados. Recarregue a página e tente novamente." };
+          } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_class_tenant_year_series_name")) {
+            return { success: false, error: "Já existe uma turma com este nome no mesmo ano letivo e série." };
+          } else {
+            return { success: false, error: error.message || "Erro ao atualizar turma no banco de dados." };
+          }
+        } else {
+          savedOnPhysical = true;
+        }
       }
-    } catch {
-      // Fallback
+    } else {
+      const { error } = await (supabase.from("school_classes") as any).insert([
+        {
+          id: classId,
+          tenant_id: session.tenant.id,
+          series_id: input.series_id,
+          name,
+          academic_year: academicYear,
+          shift,
+          capacity,
+          is_active: isActive,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) {
+        if (error.code === "42P01" || error.message?.includes("does not exist")) {
+          isTableMissing = true;
+        } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("series_id")) {
+          return { success: false, error: "A série selecionada não foi encontrada no banco de dados. Recarregue a página e tente novamente." };
+        } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_class_tenant_year_series_name")) {
+          return { success: false, error: "Já existe uma turma com este nome no mesmo ano letivo e série." };
+        } else {
+          return { success: false, error: error.message || "Erro ao cadastrar turma no banco de dados." };
+        }
+      } else {
+        savedOnPhysical = true;
+      }
     }
 
-    // 2. Fallback JSONB store
-    if (!savedOnPhysical) {
+    // 2. Fallback JSONB store SOMENTE se a tabela física comprovadamente não existir (42P01)
+    if (isTableMissing && !savedOnPhysical) {
       const { data: curTenant } = await (supabase.from("tenants") as any)
         .select("settings")
         .eq("id", session.tenant.id)
@@ -909,7 +971,7 @@ export async function saveSchoolClassAction(
     ]);
 
     revalidatePath("/app/academico");
-    return { success: true };
+    return { success: true, id: classId };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao salvar turma." };
   }

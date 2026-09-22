@@ -16,6 +16,7 @@ import { Student, Guardian } from "@/types/secretaria";
 import {
   createEnrollmentAction,
   updateEnrollmentStatusAction,
+  getEnrollmentLookupDataAction,
 } from "@/app/actions/matriculas";
 import {
   Search,
@@ -42,6 +43,8 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { Course, Series, SchoolClass } from "@/types/academico";
+import { StudentModal } from "@/components/secretaria/StudentModal";
+import { GuardianModal } from "@/components/secretaria/GuardianModal";
 import { EnrollmentChecklistModal } from "./EnrollmentChecklistModal";
 import { InstitutionChecklistModal } from "./InstitutionChecklistModal";
 import { EnrollmentEditModal } from "./EnrollmentEditModal";
@@ -99,12 +102,16 @@ export function MatriculasClient({
   currentUserRole,
 }: MatriculasClientProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>(initialEnrollments);
+  const [studentsList, setStudentsList] = useState<Student[]>(existingStudents);
+  const [guardiansList, setGuardiansList] = useState<Guardian[]>(existingGuardians);
   const [checklistTemplates, setChecklistTemplates] = useState<EnrollmentDocumentTemplate[]>(initialChecklistTemplates);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | EnrollmentStatus>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+  const [isGuardianModalOpen, setIsGuardianModalOpen] = useState(false);
   const [editingEnrollment, setEditingEnrollment] = useState<Enrollment | null>(null);
   const [checklistEnrollment, setChecklistEnrollment] = useState<Enrollment | null>(null);
   const [editingAcademicEnrollment, setEditingAcademicEnrollment] = useState<Enrollment | null>(null);
@@ -115,27 +122,11 @@ export function MatriculasClient({
   const [targetStatusChoice, setTargetStatusChoice] = useState<EnrollmentStatus | null>(null);
 
   // Estados do formulário de criação
-  const [isExistingStudent, setIsExistingStudent] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState("");
-  const [newStudent, setNewStudent] = useState({
-    first_name: "",
-    last_name: "",
-    cpf: "",
-    birth_date: "",
-    gender: "uninformed" as any,
-    email: "",
-    phone: "",
-  });
+  const [studentSearchTerm, setStudentSearchTerm] = useState("");
 
-  const [isExistingGuardian, setIsExistingGuardian] = useState(true);
   const [selectedGuardianId, setSelectedGuardianId] = useState("");
-  const [newGuardian, setNewGuardian] = useState({
-    name: "",
-    cpf: "",
-    kinship: "mae" as any,
-    phone: "",
-    email: "",
-  });
+  const [guardianSearchTerm, setGuardianSearchTerm] = useState("");
 
   const [academicYear, setAcademicYear] = useState("2026");
   const [courseName, setCourseName] = useState(
@@ -194,16 +185,71 @@ export function MatriculasClient({
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   // Quando seleciona um aluno existente, pré-seleciona o responsável vinculado se houver
-  const handleStudentSelectChange = (studentId: string) => {
+  const handleStudentSelectChange = (studentId: string, currentStudents = studentsList) => {
     setSelectedStudentId(studentId);
-    const foundStudent = existingStudents.find((s) => s.id === studentId);
+    const foundStudent = currentStudents.find((s) => s.id === studentId);
     if (foundStudent && foundStudent.guardians && foundStudent.guardians.length > 0) {
       const primaryGuardian =
         foundStudent.guardians.find((g) => g.is_financial) || foundStudent.guardians[0];
       if (primaryGuardian?.guardian_id) {
         setSelectedGuardianId(primaryGuardian.guardian_id);
-        setIsExistingGuardian(true);
       }
+    }
+  };
+
+  // Alunos existentes filtrados pelo termo de busca no modal de matrícula
+  const filteredExistingStudents = useMemo(() => {
+    if (!studentSearchTerm.trim()) return studentsList;
+    const term = studentSearchTerm.toLowerCase().trim();
+    const cleanTerm = term.replace(/\D/g, "");
+    return studentsList.filter((st) => {
+      const fullName = (st.full_name || `${st.first_name} ${st.last_name}`).toLowerCase();
+      const cpf = (st.cpf || "").replace(/\D/g, "");
+      return fullName.includes(term) || (cleanTerm && cpf.includes(cleanTerm));
+    });
+  }, [studentsList, studentSearchTerm]);
+
+  // Responsáveis existentes filtrados pelo termo de busca no modal de matrícula
+  const filteredExistingGuardians = useMemo(() => {
+    if (!guardianSearchTerm.trim()) return guardiansList;
+    const term = guardianSearchTerm.toLowerCase().trim();
+    const cleanTerm = term.replace(/\D/g, "");
+    return guardiansList.filter((gd) => {
+      const name = (gd.name || "").toLowerCase();
+      const cpf = (gd.cpf || "").replace(/\D/g, "");
+      return name.includes(term) || (cleanTerm && cpf.includes(cleanTerm));
+    });
+  }, [guardiansList, guardianSearchTerm]);
+
+  // Callback ao salvar novo aluno no StudentModal sem fechar o modal de matrícula
+  const handleStudentSavedFromModal = async (newStudentId?: string) => {
+    try {
+      const lookupRes = await getEnrollmentLookupDataAction();
+      if (lookupRes.success) {
+        setStudentsList(lookupRes.students);
+        setGuardiansList(lookupRes.guardians);
+        if (newStudentId) {
+          handleStudentSelectChange(newStudentId, lookupRes.students);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar lista de alunos após cadastro:", err);
+    }
+  };
+
+  // Callback ao salvar novo responsável no GuardianModal sem fechar o modal de matrícula
+  const handleGuardianSavedFromModal = async (newGuardianId?: string) => {
+    try {
+      const lookupRes = await getEnrollmentLookupDataAction();
+      if (lookupRes.success) {
+        setGuardiansList(lookupRes.guardians);
+        setStudentsList(lookupRes.students);
+        if (newGuardianId) {
+          setSelectedGuardianId(newGuardianId);
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar lista de responsáveis após cadastro:", err);
     }
   };
 
@@ -258,12 +304,10 @@ export function MatriculasClient({
     setActionError(null);
 
     const payload: CreateEnrollmentInput = {
-      isExistingStudent,
-      studentId: isExistingStudent ? selectedStudentId : undefined,
-      newStudent: !isExistingStudent ? newStudent : undefined,
-      isExistingGuardian,
-      guardianId: isExistingGuardian ? selectedGuardianId : undefined,
-      newGuardian: !isExistingGuardian ? newGuardian : undefined,
+      isExistingStudent: true,
+      studentId: selectedStudentId,
+      isExistingGuardian: true,
+      guardianId: selectedGuardianId || undefined,
       academic_year: academicYear,
       course_name: courseName,
       grade_level: gradeLevel,
@@ -273,13 +317,8 @@ export function MatriculasClient({
       notes,
     };
 
-    if (isExistingStudent && !selectedStudentId) {
-      setActionError("Por favor, selecione um aluno existente na lista.");
-      return;
-    }
-
-    if (!isExistingStudent && (!newStudent.first_name.trim() || !newStudent.last_name.trim())) {
-      setActionError("Informe o nome e sobrenome do novo aluno.");
+    if (!selectedStudentId) {
+      setActionError("Por favor, selecione um aluno já cadastrado na Secretaria.");
       return;
     }
 
@@ -290,24 +329,10 @@ export function MatriculasClient({
         setSuccessToast("Matrícula registrada com sucesso!");
         // Reset form
         setSelectedStudentId("");
+        setStudentSearchTerm("");
         setSelectedGuardianId("");
+        setGuardianSearchTerm("");
         setSelectedClassId("");
-        setNewStudent({
-          first_name: "",
-          last_name: "",
-          cpf: "",
-          birth_date: "",
-          gender: "uninformed",
-          email: "",
-          phone: "",
-        });
-        setNewGuardian({
-          name: "",
-          cpf: "",
-          kinship: "mae",
-          phone: "",
-          email: "",
-        });
         setNotes("");
         // Recarrega lista
         window.location.reload();
@@ -823,102 +848,74 @@ export function MatriculasClient({
                     <User className="w-4 h-4 text-indigo-600" />
                     1. Identificação do Aluno
                   </span>
-                  <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-slate-200">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="student_mode"
-                        checked={isExistingStudent}
-                        onChange={() => setIsExistingStudent(true)}
-                        className="text-indigo-600 cursor-pointer"
-                      />
-                      <span>Aluno Existente</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer ml-2">
-                      <input
-                        type="radio"
-                        name="student_mode"
-                        checked={!isExistingStudent}
-                        onChange={() => setIsExistingStudent(false)}
-                        className="text-indigo-600 cursor-pointer"
-                      />
-                      <span>Novo Cadastro</span>
-                    </label>
-                  </div>
+                  <span className="text-[11px] text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                    {studentsList.length} aluno(s) cadastrado(s)
+                  </span>
                 </div>
 
-                {isExistingStudent ? (
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Selecionar Aluno Já Cadastrado na Secretaria
+                {studentsList.length === 0 ? (
+                  <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2 text-center sm:text-left">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-amber-900 text-xs">
+                          Nenhum aluno cadastrado na instituição
+                        </p>
+                        <p className="text-[11px] text-amber-700">
+                          Para registrar uma nova matrícula, é necessário cadastrar o aluno primeiro no módulo Secretaria.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsStudentModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Cadastrar Aluno Agora
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="block text-slate-700 font-semibold">
+                      Buscar e Selecionar Aluno Existente *
                     </label>
+
+                    {/* Campo de Busca Rápida */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Filtrar por nome ou CPF..."
+                        value={studentSearchTerm}
+                        onChange={(e) => setStudentSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Seleção do Aluno */}
                     <select
                       value={selectedStudentId}
                       onChange={(e) => handleStudentSelectChange(e.target.value)}
                       required
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800"
                     >
-                      <option value="">-- Selecione o aluno --</option>
-                      {existingStudents.map((st) => (
+                      <option value="">-- Selecione o aluno cadastrado ({filteredExistingStudents.length} encontrado(s)) --</option>
+                      {filteredExistingStudents.map((st) => (
                         <option key={st.id} value={st.id}>
-                          {st.first_name} {st.last_name} {st.cpf ? `(CPF: ${st.cpf})` : ""}
+                          {st.full_name || `${st.first_name} ${st.last_name}`} {st.cpf ? `• CPF: ${st.cpf}` : ""}
                         </option>
                       ))}
                     </select>
-                    <span className="text-[11px] text-slate-400 mt-1 block">
-                      Reaproveita prontuário, documentos e histórico já cadastrados.
-                    </span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">Nome *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newStudent.first_name}
-                        onChange={(e) =>
-                          setNewStudent({ ...newStudent, first_name: e.target.value })
-                        }
-                        placeholder="Ex: Pedro"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">Sobrenome *</label>
-                      <input
-                        type="text"
-                        required
-                        value={newStudent.last_name}
-                        onChange={(e) =>
-                          setNewStudent({ ...newStudent, last_name: e.target.value })
-                        }
-                        placeholder="Ex: Alvarez"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">CPF do Aluno</label>
-                      <input
-                        type="text"
-                        value={newStudent.cpf}
-                        onChange={(e) => setNewStudent({ ...newStudent, cpf: e.target.value })}
-                        placeholder="000.000.000-00"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Data de Nascimento
-                      </label>
-                      <input
-                        type="date"
-                        value={newStudent.birth_date}
-                        onChange={(e) =>
-                          setNewStudent({ ...newStudent, birth_date: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                      <span>Reaproveita prontuário, documentos e histórico escolar da Secretaria.</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsStudentModalOpen(true)}
+                        className="text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1 font-medium cursor-pointer"
+                      >
+                        + Cadastrar novo na Secretaria
+                      </button>
                     </div>
                   </div>
                 )}
@@ -931,105 +928,53 @@ export function MatriculasClient({
                     <UserCheck className="w-4 h-4 text-indigo-600" />
                     2. Responsável Legal / Financeiro
                   </span>
-                  <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-lg border border-slate-200">
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="guardian_mode"
-                        checked={isExistingGuardian}
-                        onChange={() => setIsExistingGuardian(true)}
-                        className="text-indigo-600 cursor-pointer"
-                      />
-                      <span>Responsável Existente</span>
-                    </label>
-                    <label className="flex items-center gap-1.5 cursor-pointer ml-2">
-                      <input
-                        type="radio"
-                        name="guardian_mode"
-                        checked={!isExistingGuardian}
-                        onChange={() => setIsExistingGuardian(false)}
-                        className="text-indigo-600 cursor-pointer"
-                      />
-                      <span>Novo Responsável</span>
-                    </label>
-                  </div>
+                  <span className="text-[11px] text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                    {guardiansList.length} cadastrado(s)
+                  </span>
                 </div>
 
-                {isExistingGuardian ? (
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">
-                      Selecionar Responsável
-                    </label>
-                    <select
-                      value={selectedGuardianId}
-                      onChange={(e) => setSelectedGuardianId(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                <div className="space-y-2">
+                  <label className="block text-slate-700 font-semibold">
+                    Buscar e Selecionar Responsável
+                  </label>
+
+                  {/* Campo de Busca Rápida de Responsável */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Filtrar por nome ou CPF..."
+                      value={guardianSearchTerm}
+                      onChange={(e) => setGuardianSearchTerm(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Seleção de Responsável */}
+                  <select
+                    value={selectedGuardianId}
+                    onChange={(e) => setSelectedGuardianId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800"
+                  >
+                    <option value="">-- Selecione o responsável (opcional) ({filteredExistingGuardians.length} encontrado(s)) --</option>
+                    {filteredExistingGuardians.map((gd) => (
+                      <option key={gd.id} value={gd.id}>
+                        {gd.name} {gd.cpf ? `• CPF: ${gd.cpf}` : ""} {gd.phone ? `• Tel: ${gd.phone}` : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                    <span>Vincula o responsável financeiro e pedagógico ao aluno na matrícula.</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsGuardianModalOpen(true)}
+                      className="text-indigo-600 hover:text-indigo-800 underline flex items-center gap-1 font-medium cursor-pointer"
                     >
-                      <option value="">-- Selecione o responsável (opcional) --</option>
-                      {existingGuardians.map((gd) => (
-                        <option key={gd.id} value={gd.id}>
-                          {gd.name} (CPF: {gd.cpf}) - {gd.phone || gd.email || "Sem contato"}
-                        </option>
-                      ))}
-                    </select>
+                      + Cadastrar novo na Secretaria
+                    </button>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        Nome Completo do Responsável *
-                      </label>
-                      <input
-                        type="text"
-                        required={!isExistingGuardian}
-                        value={newGuardian.name}
-                        onChange={(e) => setNewGuardian({ ...newGuardian, name: e.target.value })}
-                        placeholder="Ex: Maria Alvarez"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">
-                        CPF do Responsável *
-                      </label>
-                      <input
-                        type="text"
-                        required={!isExistingGuardian}
-                        value={newGuardian.cpf}
-                        onChange={(e) => setNewGuardian({ ...newGuardian, cpf: e.target.value })}
-                        placeholder="000.000.000-00"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">Parentesco</label>
-                      <select
-                        value={newGuardian.kinship}
-                        onChange={(e) =>
-                          setNewGuardian({ ...newGuardian, kinship: e.target.value as any })
-                        }
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      >
-                        <option value="mae">Mãe</option>
-                        <option value="pai">Pai</option>
-                        <option value="avo">Avô / Avó</option>
-                        <option value="tio">Tio / Tia</option>
-                        <option value="tutor">Tutor Legal</option>
-                        <option value="outro">Outro</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-slate-700 font-semibold mb-1">Telefone</label>
-                      <input
-                        type="text"
-                        value={newGuardian.phone}
-                        onChange={(e) => setNewGuardian({ ...newGuardian, phone: e.target.value })}
-                        placeholder="(11) 99999-9999"
-                        className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white"
-                      />
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
 
               {/* SEÇÃO 3: DADOS ACADÊMICOS DA MATRÍCULA */}
@@ -1536,6 +1481,22 @@ export function MatriculasClient({
           }}
         />
       )}
+
+      {/* MODAL: NOVO ALUNO DA SECRETARIA (INTEGRADO DIRETAMENTE À MATRÍCULA) */}
+      <StudentModal
+        isOpen={isStudentModalOpen}
+        zIndexClass="z-70"
+        onClose={() => setIsStudentModalOpen(false)}
+        onSaved={handleStudentSavedFromModal}
+      />
+
+      {/* MODAL: NOVO RESPONSÁVEL DA SECRETARIA (INTEGRADO DIRETAMENTE À MATRÍCULA) */}
+      <GuardianModal
+        isOpen={isGuardianModalOpen}
+        zIndexClass="z-70"
+        onClose={() => setIsGuardianModalOpen(false)}
+        onSaved={handleGuardianSavedFromModal}
+      />
     </div>
   );
 }
