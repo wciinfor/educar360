@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Enrollment,
@@ -109,6 +109,23 @@ export function MatriculasClient({
   const [statusFilter, setStatusFilter] = useState<"all" | EnrollmentStatus>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
+  // Sincronização após router.refresh() ou mudanças nas props do servidor
+  useEffect(() => {
+    setEnrollments(initialEnrollments);
+  }, [initialEnrollments]);
+
+  useEffect(() => {
+    setStudentsList(existingStudents);
+  }, [existingStudents]);
+
+  useEffect(() => {
+    setGuardiansList(existingGuardians);
+  }, [existingGuardians]);
+
+  useEffect(() => {
+    setChecklistTemplates(initialChecklistTemplates);
+  }, [initialChecklistTemplates]);
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
   const [isGuardianModalOpen, setIsGuardianModalOpen] = useState(false);
@@ -129,14 +146,6 @@ export function MatriculasClient({
   const [guardianSearchTerm, setGuardianSearchTerm] = useState("");
 
   const [academicYear, setAcademicYear] = useState("2026");
-  const [courseName, setCourseName] = useState(
-    courses.length > 0 ? courses[0].name : COURSES[2]
-  );
-  const [gradeLevel, setGradeLevel] = useState("1º Ano");
-  const [shift, setShift] = useState<EnrollmentShift>("matutino");
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [initialStatus, setInitialStatus] = useState<EnrollmentStatus>("pre_matricula");
-  const [notes, setNotes] = useState("");
 
   // Cursos ativos
   const activeCourses = useMemo(() => {
@@ -144,34 +153,105 @@ export function MatriculasClient({
     return list.length > 0 ? list : courses;
   }, [courses]);
 
-  // Séries filtradas pelo curso selecionado
-  const availableSeries = useMemo(() => {
-    if (activeCourses.length === 0) return [];
-    const currentCourse = activeCourses.find(
-      (c) => c.name.toLowerCase().trim() === courseName.toLowerCase().trim()
-    );
-    if (!currentCourse) return [];
-    return seriesList.filter((s) => s.course_id === currentCourse.id && s.is_active);
-  }, [activeCourses, seriesList, courseName]);
+  // Identificação inequívoca do Curso por ID real
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(() => {
+    const active = courses.filter((c) => c.is_active);
+    return active.length > 0 ? active[0].id : courses.length > 0 ? courses[0].id : "";
+  });
 
-  // Turmas compatíveis filtradas por série, ano e turno
+  const selectedCourse = useMemo(() => {
+    return (
+      activeCourses.find((c) => c.id === selectedCourseId) ||
+      courses.find((c) => c.id === selectedCourseId) ||
+      null
+    );
+  }, [activeCourses, courses, selectedCourseId]);
+
+  const courseName = selectedCourse?.name || "";
+
+  // Séries filtradas estritamente pelo ID do curso selecionado
+  const availableSeries = useMemo(() => {
+    if (!selectedCourseId) return [];
+    return seriesList.filter((s) => s.course_id === selectedCourseId && s.is_active);
+  }, [seriesList, selectedCourseId]);
+
+  // Identificação inequívoca da Série por ID real
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>(() => {
+    const active = courses.filter((c) => c.is_active);
+    const initialCourse = active.length > 0 ? active[0] : courses[0];
+    if (initialCourse) {
+      const initialSeries = seriesList.find(
+        (s) => s.course_id === initialCourse.id && s.is_active
+      );
+      if (initialSeries) return initialSeries.id;
+    }
+    return "";
+  });
+
+  const selectedSeries = useMemo(() => {
+    return availableSeries.find((s) => s.id === selectedSeriesId) || null;
+  }, [availableSeries, selectedSeriesId]);
+
+  const gradeLevel = selectedSeries?.name || "";
+
+  const [shift, setShift] = useState<EnrollmentShift>("matutino");
+  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [initialStatus, setInitialStatus] = useState<EnrollmentStatus>("pre_matricula");
+  const [notes, setNotes] = useState("");
+
+  // 1. Sincroniza curso selecionado caso a lista de cursos mude
+  useEffect(() => {
+    if (activeCourses.length > 0) {
+      const exists = activeCourses.some((c) => c.id === selectedCourseId);
+      if (!exists) {
+        setSelectedCourseId(activeCourses[0].id);
+      }
+    } else if (courses.length > 0) {
+      const exists = courses.some((c) => c.id === selectedCourseId);
+      if (!exists) {
+        setSelectedCourseId(courses[0].id);
+      }
+    } else {
+      setSelectedCourseId("");
+    }
+  }, [activeCourses, courses, selectedCourseId]);
+
+  // 2. Sincroniza série selecionada com as séries disponíveis do curso (limpa turma se mudar)
+  useEffect(() => {
+    if (availableSeries.length > 0) {
+      const exists = availableSeries.some((s) => s.id === selectedSeriesId);
+      if (!exists) {
+        setSelectedSeriesId(availableSeries[0].id);
+        setSelectedClassId("");
+      }
+    } else {
+      // Curso sem séries ativas cadastradas: limpa seleção e turma
+      setSelectedSeriesId("");
+      setSelectedClassId("");
+    }
+  }, [availableSeries, selectedSeriesId]);
+
+  // 3. Turmas compatíveis filtradas estritamente por série exata (course_id + series_id), ano e turno
   const availableClasses = useMemo(() => {
+    if (!selectedSeriesId) return [];
     return schoolClasses.filter((sc) => {
       if (!sc.is_active) return false;
       if (sc.academic_year !== academicYear) return false;
       if (sc.shift !== shift) return false;
-
-      // Se temos séries cadastradas e uma selecionada
-      const matchingSeries = seriesList.find(
-        (s) => s.name.toLowerCase().trim() === gradeLevel.toLowerCase().trim()
-      );
-      if (matchingSeries) {
-        return sc.series_id === matchingSeries.id;
-      }
-
-      return true;
+      // Exigência estrita: a turma deve pertencer à série selecionada
+      return sc.series_id === selectedSeriesId;
     });
-  }, [schoolClasses, seriesList, gradeLevel, academicYear, shift]);
+  }, [schoolClasses, selectedSeriesId, academicYear, shift]);
+
+  // 4. Sincroniza a turma selecionada sempre que a lista de turmas compatíveis mudar
+  useEffect(() => {
+    if (selectedClassId) {
+      const isStillAvailable = availableClasses.some((c) => c.id === selectedClassId);
+      if (!isStillAvailable) {
+        setSelectedClassId("");
+      }
+    }
+  }, [availableClasses, selectedClassId]);
 
   // Turma atualmente selecionada
   const selectedClass = useMemo(() => {
@@ -319,6 +399,16 @@ export function MatriculasClient({
 
     if (!selectedStudentId) {
       setActionError("Por favor, selecione um aluno já cadastrado na Secretaria.");
+      return;
+    }
+
+    if (!selectedCourseId || !courseName) {
+      setActionError("Por favor, selecione um curso válido cadastrado no módulo Acadêmico.");
+      return;
+    }
+
+    if (!selectedSeriesId || !gradeLevel) {
+      setActionError("O curso selecionado não possui séries ativas cadastradas. Cadastre ao menos uma série no módulo Acadêmico antes de registrar a matrícula.");
       return;
     }
 
@@ -999,61 +1089,54 @@ export function MatriculasClient({
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Curso / Segmento *</label>
                     <select
-                      value={courseName}
+                      value={selectedCourseId}
                       onChange={(e) => {
-                        const newCourse = e.target.value;
-                        setCourseName(newCourse);
-                        // Ao alterar curso, atualiza a série se disponível
-                        const matchedCourse = activeCourses.find(
-                          (c) => c.name.toLowerCase().trim() === newCourse.toLowerCase().trim()
+                        const newCourseId = e.target.value;
+                        setSelectedCourseId(newCourseId);
+                        const childSeries = seriesList.filter(
+                          (s) => s.course_id === newCourseId && s.is_active
                         );
-                        if (matchedCourse) {
-                          const childSeries = seriesList.filter(
-                            (s) => s.course_id === matchedCourse.id && s.is_active
-                          );
-                          if (childSeries.length > 0) {
-                            setGradeLevel(childSeries[0].name);
-                          }
+                        if (childSeries.length > 0) {
+                          setSelectedSeriesId(childSeries[0].id);
+                        } else {
+                          setSelectedSeriesId("");
                         }
                         setSelectedClassId("");
                       }}
                       className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500"
                     >
-                      {activeCourses.length > 0
-                        ? activeCourses.map((c) => (
-                            <option key={c.id} value={c.name}>
-                              {c.name}
-                            </option>
-                          ))
-                        : COURSES.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
+                      {activeCourses.length > 0 ? (
+                        activeCourses.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">-- Nenhum curso cadastrado --</option>
+                      )}
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-slate-700 font-semibold mb-1">Série / Ano Escolar *</label>
                     <select
-                      value={gradeLevel}
+                      value={selectedSeriesId}
                       onChange={(e) => {
-                        setGradeLevel(e.target.value);
+                        setSelectedSeriesId(e.target.value);
                         setSelectedClassId("");
                       }}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                      disabled={availableSeries.length === 0}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                     >
-                      {availableSeries.length > 0
-                        ? availableSeries.map((s) => (
-                            <option key={s.id} value={s.name}>
-                              {s.name}
-                            </option>
-                          ))
-                        : GRADE_LEVELS.map((g) => (
-                            <option key={g} value={g}>
-                              {g}
-                            </option>
-                          ))}
+                      {availableSeries.length > 0 ? (
+                        availableSeries.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">-- Nenhuma série cadastrada neste curso --</option>
+                      )}
                     </select>
                   </div>
 
@@ -1075,6 +1158,19 @@ export function MatriculasClient({
                   </div>
                 </div>
 
+                {/* Alerta de Curso sem Séries Cadastradas */}
+                {availableSeries.length === 0 && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block text-amber-900">Curso sem séries ativas cadastradas</span>
+                      <span>
+                        O curso "{courseName || "selecionado"}" não possui séries cadastradas no módulo Acadêmico. Cadastre ao menos uma série antes de registrar a matrícula.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Seleção de Turma e Capacidade */}
                 <div className="pt-1">
                   <label className="block text-slate-700 font-semibold mb-1">
@@ -1083,7 +1179,8 @@ export function MatriculasClient({
                   <select
                     value={selectedClassId}
                     onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500"
+                    disabled={availableSeries.length === 0}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="">-- Deixar sem turma vinculada (Enturmação posterior) --</option>
                     {availableClasses.map((sc) => {
@@ -1134,7 +1231,7 @@ export function MatriculasClient({
                     </div>
                   )}
 
-                  {availableClasses.length === 0 && (
+                  {availableClasses.length === 0 && availableSeries.length > 0 && (
                     <span className="text-[11px] text-amber-600 mt-1 block">
                       Nenhuma turma ativa cadastrada para a série "{gradeLevel}", ano {academicYear} e turno {shift}. Você pode matricular e enturmar posteriormente.
                     </span>
