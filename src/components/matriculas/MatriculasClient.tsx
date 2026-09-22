@@ -17,6 +17,7 @@ import {
   createEnrollmentAction,
   updateEnrollmentStatusAction,
   getEnrollmentLookupDataAction,
+  deleteEnrollmentAction,
 } from "@/app/actions/matriculas";
 import {
   Search,
@@ -41,6 +42,7 @@ import {
   Edit,
   Eye,
   FileSpreadsheet,
+  Trash2,
 } from "lucide-react";
 import { Course, Series, SchoolClass } from "@/types/academico";
 import { StudentModal } from "@/components/secretaria/StudentModal";
@@ -137,6 +139,7 @@ export function MatriculasClient({
   const [isInstitutionChecklistOpen, setIsInstitutionChecklistOpen] = useState(false);
   const [statusNotes, setStatusNotes] = useState("");
   const [targetStatusChoice, setTargetStatusChoice] = useState<EnrollmentStatus | null>(null);
+  const [deletingEnrollment, setDeletingEnrollment] = useState<Enrollment | null>(null);
 
   // Estados do formulário de criação
   const [selectedStudentId, setSelectedStudentId] = useState("");
@@ -464,6 +467,22 @@ export function MatriculasClient({
         setSuccessToast(`Situação alterada para "${ENROLLMENT_STATUS_LABELS[targetStatus].label}".`);
       } else {
         setActionError(res.error || "Erro ao atualizar situação.");
+      }
+    });
+  };
+
+  // Excluir Matrícula com Confirmação e Auditoria
+  const handleDeleteEnrollment = (targetEnrollment: Enrollment) => {
+    setActionError(null);
+
+    startTransition(async () => {
+      const res = await deleteEnrollmentAction(targetEnrollment.id);
+      if (res.success) {
+        setEnrollments((prev) => prev.filter((item) => item.id !== targetEnrollment.id));
+        setDeletingEnrollment(null);
+        setSuccessToast(`Matrícula "${targetEnrollment.enrollment_code}" excluída com sucesso.`);
+      } else {
+        setActionError(res.error || "Erro ao excluir matrícula.");
       }
     });
   };
@@ -890,6 +909,22 @@ export function MatriculasClient({
                             <span>Situação</span>
                             <ChevronDown className="w-3.5 h-3.5" />
                           </button>
+
+                          {(currentUserRole === "admin_escola" ||
+                            currentUserRole === "super_admin" ||
+                            currentUserRole === "secretaria") && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActionError(null);
+                                setDeletingEnrollment(item);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Excluir Matrícula"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1594,6 +1629,123 @@ export function MatriculasClient({
         onClose={() => setIsGuardianModalOpen(false)}
         onSaved={handleGuardianSavedFromModal}
       />
+
+      {/* ============================================================================== */}
+      {/* MODAL 8: CONFIRMAÇÃO DE EXCLUSÃO DEFINITIVA DE MATRÍCULA                       */}
+      {/* ============================================================================== */}
+      {deletingEnrollment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-rose-600">
+                <Trash2 className="w-5 h-5" />
+                <h3 className="text-base font-bold text-slate-900">Excluir Matrícula</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingEnrollment(null);
+                  setActionError(null);
+                }}
+                disabled={isPending}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {actionError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3 text-xs text-slate-600">
+              <p className="text-slate-700">
+                Tem certeza de que deseja excluir permanentemente o registro de matrícula abaixo?
+              </p>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-500">Aluno:</span>
+                  <span className="font-bold text-slate-900">
+                    {deletingEnrollment.student?.full_name ||
+                      `${deletingEnrollment.student?.first_name || ""} ${deletingEnrollment.student?.last_name || ""}`.trim() ||
+                      "Aluno"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-500">Código:</span>
+                  <span className="font-mono font-bold text-indigo-700">
+                    {deletingEnrollment.enrollment_code}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-500">Curso / Série:</span>
+                  <span className="text-slate-800">
+                    {deletingEnrollment.course_name} • {deletingEnrollment.grade_level}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold text-slate-500">Ano / Turno:</span>
+                  <span className="text-slate-800">
+                    {deletingEnrollment.academic_year} • {deletingEnrollment.shift}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1 border-t border-slate-200">
+                  <span className="font-semibold text-slate-500">Situação Atual:</span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      ENROLLMENT_STATUS_LABELS[deletingEnrollment.status]?.badgeColor
+                    }`}
+                  >
+                    {ENROLLMENT_STATUS_LABELS[deletingEnrollment.status]?.label}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                  <span>Atenção: Exclusão Definitiva</span>
+                </div>
+                <p>
+                  Esta ação removerá permanentemente o registro de matrícula, histórico e documentos anexados a ela. O cadastro do aluno na Secretaria será preservado.
+                </p>
+                {deletingEnrollment.status === "matriculado" && (
+                  <p className="text-rose-700 font-semibold pt-0.5">
+                    Caso o aluno tenha desistido ou concluído, considere alterar a situação para "Cancelado" ou "Transferido" para manter o histórico acadêmico.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingEnrollment(null);
+                  setActionError(null);
+                }}
+                disabled={isPending}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteEnrollment(deletingEnrollment)}
+                disabled={isPending}
+                className="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isPending ? "Excluindo..." : "Confirmar Exclusão"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2341,3 +2341,199 @@ export async function getEnrollmentByIdAction(
   }
 }
 
+// ==============================================================================
+// ==============================================================================
+// 9. EXCLUSÃO DEFINITIVA DE MATRÍCULA COM ATOMICIDADE E AUDITORIA TRANSACIONAL
+// ==============================================================================
+
+export async function deleteEnrollmentAction(
+  enrollmentId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await assertMatriculasAccess([
+      "admin_escola",
+      "secretaria",
+    ]);
+    const supabase = await createClient();
+
+    if (!enrollmentId || typeof enrollmentId !== "string") {
+      return { success: false, error: "ID de matrícula inválido." };
+    }
+
+    // 1. Tenta executar via procedure atômica no PostgreSQL (DELETE + AUDIT_LOGS na mesma transação)
+    try {
+      const { data: rpcData, error: rpcError } = await (supabase.rpc as any)(
+        "delete_enrollment_atomic",
+        {
+          p_tenant_id: session.tenant.id,
+          p_enrollment_id: enrollmentId,
+          p_user_id: session.user.id,
+          p_user_name: session.user.email || "Operador",
+          p_user_role: session.role,
+        }
+      );
+
+      if (!rpcError && rpcData) {
+        if (rpcData.success) {
+          revalidatePath("/app/matriculas");
+          revalidatePath("/app/matriculas/relatorios");
+          revalidatePath("/app/dashboard");
+          return { success: true };
+        } else {
+          return {
+            success: false,
+            error: rpcData.error || "Não foi possível excluir a matrícula.",
+          };
+        }
+      }
+    } catch {
+      // Procedure pode não estar aplicada ainda no Supabase
+    }
+
+    // 2. Fallback controlado quando a procedure atômica não estiver disponível
+    let enrollment: any = null;
+    try {
+      const { data, error } = await (supabase.from("enrollments") as any)
+        .select(`
+          *,
+          student:students(id, first_name, last_name, full_name),
+          documents:enrollment_documents(id, status, document_name),
+          school_class:school_classes(id, name)
+        `)
+        .eq("id", enrollmentId)
+        .eq("tenant_id", session.tenant.id)
+        .single();
+
+      if (!error && data) {
+        enrollment = data;
+      }
+    } catch {
+      // Tabela física ou query
+    }
+
+    // Se tabela física não retornou, verifica se está no fallback store
+    let isFallbackStore = false;
+    if (!enrollment) {
+      const { data: curTenant } = await (supabase.from("tenants") as any)
+        .select("settings")
+        .eq("id", session.tenant.id)
+        .single();
+
+      const curSettings = (curTenant?.settings as Record<string, any>) || {};
+      const curList: Enrollment[] = curSettings.enrollments_store || [];
+      const found = curList.find((e) => e.id === enrollmentId);
+      if (found) {
+        enrollment = found;
+        isFallbackStore = true;
+      }
+    }
+
+    if (!enrollment) {
+      return {
+        success: false,
+        error: "Matrícula não encontrada ou não pertence a esta instituição.",
+      };
+    }
+
+    // Validações de Dependências e Integridade (Exclusão Definitiva vs Cancelamento)
+    if (enrollment.status === "transferido") {
+      return {
+        success: false,
+        error:
+          'Não é permitido excluir definitivamente uma matrícula com situação "Transferido", pois ela possui registro oficial de transferência escolar. Para manter a integridade documental, o registro deve permanecer arquivado.',
+      };
+    }
+
+    if (enrollment.status === "matriculado" && session.role === "secretaria") {
+      return {
+        success: false,
+        error:
+          'Matrículas com situação "Matriculado" representam vagas confirmadas. Para encerrar o vínculo deste aluno, altere a situação para "Cancelado". A exclusão definitiva de matrículas ativas é restrita aos administradores da escola.',
+      };
+    }
+
+    // Exclusão física
+    if (!isFallbackStore) {
+      const { error: deleteErr } = await (supabase.from("enrollments") as any)
+        .delete()
+        .eq("id", enrollmentId)
+        .eq("tenant_id", session.tenant.id);
+
+      if (deleteErr) {
+        console.error("[matriculas] Erro ao excluir matrícula do banco:", deleteErr);
+        return {
+          success: false,
+          error: `Falha ao excluir matrícula no banco de dados: ${deleteErr.message}`,
+        };
+      }
+    } else {
+      const { data: curTenant } = await (supabase.from("tenants") as any)
+        .select("settings")
+        .eq("id", session.tenant.id)
+        .single();
+
+      const curSettings = (curTenant?.settings as Record<string, any>) || {};
+      const curList: Enrollment[] = curSettings.enrollments_store || [];
+      const updatedList = curList.filter((e) => e.id !== enrollmentId);
+
+      await (supabase.from("tenants") as any)
+        .update({
+          settings: {
+            ...curSettings,
+            enrollments_store: updatedList,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.tenant.id);
+    }
+
+    // Registro de Auditoria
+    try {
+      const studentName =
+        enrollment.student?.full_name ||
+        `${enrollment.student?.first_name || ""} ${enrollment.student?.last_name || ""}`.trim() ||
+        "Aluno";
+
+      await (supabase.from("audit_logs") as any).insert([
+        {
+          tenant_id: session.tenant.id,
+          user_id: session.user.id,
+          action: "ENROLLMENT_DELETED",
+          entity_name: "enrollments",
+          entity_id: enrollmentId,
+          old_values: {
+            enrollment_code: enrollment.enrollment_code,
+            student_id: enrollment.student_id,
+            student_name: studentName,
+            guardian_id: enrollment.guardian_id,
+            class_id: enrollment.class_id,
+            academic_year: enrollment.academic_year,
+            course_name: enrollment.course_name,
+            grade_level: enrollment.grade_level,
+            shift: enrollment.shift,
+            status: enrollment.status,
+            entry_date: enrollment.entry_date,
+            exit_date: enrollment.exit_date,
+            deleted_by_role: session.role,
+          },
+          new_values: null,
+        },
+      ]);
+    } catch (auditErr) {
+      console.warn("[matriculas] Falha ao registrar audit_log de exclusão:", auditErr);
+    }
+
+    revalidatePath("/app/matriculas");
+    revalidatePath("/app/matriculas/relatorios");
+    revalidatePath("/app/dashboard");
+
+    return { success: true };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err?.message || "Erro inesperado ao processar exclusão da matrícula.",
+    };
+  }
+}
+
+
