@@ -152,20 +152,6 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // 3.2 Usuário autenticado
-    if (user) {
-      // Se tentar acessar tela de login já autenticado, redireciona para o dashboard
-      const isLoginAttempt =
-        effectivePathname === "/app/login" ||
-        rawPathname === "/login";
-
-      if (isLoginAttempt) {
-        const redirectUrl = request.nextUrl.clone();
-        redirectUrl.pathname = isTenantAppSubdomain ? "/dashboard" : "/app/dashboard";
-        return NextResponse.redirect(redirectUrl);
-      }
-    }
-
     // Aplica o rewrite transparente se estiver no subdomínio app
     if (shouldRewrite) {
       const rewriteUrl = request.nextUrl.clone();

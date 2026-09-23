@@ -30,13 +30,22 @@ export async function getTenantSession(): Promise<AuthenticatedTenantSession | n
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profileData) {
-    return null;
+  let profile = profileData as unknown as Profile;
+
+  if (!profile) {
+    profile = {
+      id: user.id,
+      email: user.email || "",
+      full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "Gestor Escolar",
+      avatar_url: null,
+      phone: null,
+      is_platform_admin: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
   }
-
-  const profile = profileData as unknown as Profile;
 
   // Busca todos os vínculos de tenant do usuário
   const { data: tenantUsersData } = await supabase
