@@ -88,13 +88,12 @@ function ActivateAccountContent() {
 
       if (signInErr) {
         // Redireciona para tela de login caso o login automático falhe
-        router.push(`/app/login?email=${encodeURIComponent(res.email)}&activated=true`);
+        window.location.href = `/app/login?email=${encodeURIComponent(res.email)}&activated=true`;
         return;
       }
 
-      // Redireciona para o dashboard com o tenant ativo
-      router.push("/app/dashboard");
-      router.refresh();
+      // Redireciona para o dashboard com o tenant ativo garantindo sincronização de cookies
+      window.location.href = "/app/dashboard";
     } catch (err: any) {
       setErrorMsg(err?.message || "Erro inesperado ao ativar a conta.");
       setSubmitting(false);

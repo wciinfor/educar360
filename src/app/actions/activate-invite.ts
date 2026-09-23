@@ -135,8 +135,14 @@ export async function activateTenantAdminAction(
       authUserId = createdUser.user.id;
     }
 
+    // Limpa registros anteriores com o mesmo e-mail mas ID diferente para evitar colisão
+    await (adminClient.from("profiles") as any)
+      .delete()
+      .eq("email", email)
+      .neq("id", authUserId);
+
     // 3. Garante sincronização em profiles (com is_platform_admin = FALSE)
-    await (adminClient.from("profiles") as any).upsert({
+    const { error: profErr } = await (adminClient.from("profiles") as any).upsert({
       id: authUserId,
       email: email,
       full_name: invite.admin_name || "Gestor Escolar",
@@ -144,8 +150,22 @@ export async function activateTenantAdminAction(
       updated_at: new Date().toISOString(),
     });
 
+    if (profErr) {
+      console.error("Erro ao sincronizar profile:", profErr);
+    }
+
     // 4. Garante sincronização em tenant_users
-    await (adminClient.from("tenant_users") as any).upsert(
+    await (adminClient.from("tenant_users") as any)
+      .update({
+        user_id: authUserId,
+        role: "admin_escola",
+        is_active: true,
+        custom_permissions: ["admin_escola_total"],
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", invite.tenant_id);
+
+    const { error: tuErr } = await (adminClient.from("tenant_users") as any).upsert(
       {
         tenant_id: invite.tenant_id,
         user_id: authUserId,
@@ -156,6 +176,10 @@ export async function activateTenantAdminAction(
       },
       { onConflict: "tenant_id,user_id" }
     );
+
+    if (tuErr) {
+      console.error("Erro ao sincronizar tenant_users:", tuErr);
+    }
 
     // 5. Marca convite como accepted e grava em audit_logs
     await (adminClient as any).rpc("complete_tenant_activation", {
