@@ -2657,7 +2657,7 @@ export async function getAssessmentGradesAction(assessmentId: string): Promise<{
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("class_id", assessmentData.class_id)
-      .eq("status", "ativa");
+      .eq("status", "matriculado");
 
     const enrolledList = (enrollmentsData || []).map((e: any) => ({
       student_id: e.student_id,
@@ -3075,7 +3075,7 @@ export async function getStudentReportCardAction(
     const { data: enrollment, error: eErr } = await (supabase.from("enrollments") as any)
       .select(`
         id,
-        enrollment_number,
+        enrollment_code,
         student_id,
         status,
         students:student_id (id, full_name, cpf)
@@ -3306,7 +3306,7 @@ export async function getStudentReportCardAction(
       student_name: enrollment.students?.full_name || "Aluno sem nome",
       student_cpf: enrollment.students?.cpf || null,
       enrollment_id: enrollment.id,
-      enrollment_number: enrollment.enrollment_number,
+      enrollment_number: enrollment.enrollment_code || enrollment.enrollment_number || null,
       school_class: schoolClass,
       academic_year: academicYear || schoolClass.academic_year,
       settings,
@@ -3361,13 +3361,13 @@ export async function getClassReportCardsAction(
     const { data: enrollmentsData, error: eErr } = await (supabase.from("enrollments") as any)
       .select(`
         id,
-        enrollment_number,
+        enrollment_code,
         student_id,
         students:student_id (id, full_name, cpf)
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("class_id", classId)
-      .eq("status", "ativa");
+      .eq("status", "matriculado");
 
     if (eErr) {
       return { success: false, error: `Falha ao buscar alunos da turma: ${eErr.message}` };
@@ -3377,7 +3377,7 @@ export async function getClassReportCardsAction(
       id: e.student_id,
       name: e.students?.full_name || "Aluno sem nome",
       cpf: e.students?.cpf || null,
-      enrollment_number: e.enrollment_number || null,
+      enrollment_number: e.enrollment_code || e.enrollment_number || null,
     }));
 
     students.sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -3477,7 +3477,7 @@ export async function searchStudentsForHistoryAction(searchTerm?: string): Promi
         is_active,
         enrollments (
           id,
-          enrollment_number,
+          enrollment_code,
           academic_year,
           status,
           school_classes (name)
@@ -3503,14 +3503,14 @@ export async function searchStudentsForHistoryAction(searchTerm?: string): Promi
 
     const students = (data || []).map((st: any) => {
       // Encontra a matrícula ativa mais recente
-      const activeEnr = (st.enrollments || []).find((e: any) => e.status === "ativa") || (st.enrollments || [])[0];
+      const activeEnr = (st.enrollments || []).find((e: any) => e.status === "matriculado") || (st.enrollments || [])[0];
 
       return {
         id: st.id,
         full_name: st.full_name || `${st.first_name} ${st.last_name}`.trim(),
         cpf: st.cpf || null,
         birth_date: st.birth_date || null,
-        enrollment_number: activeEnr?.enrollment_number || null,
+        enrollment_number: activeEnr?.enrollment_code || activeEnr?.enrollment_number || null,
         current_class_name: activeEnr?.school_classes?.name || null,
         current_year: activeEnr?.academic_year || null,
       };
@@ -3706,7 +3706,7 @@ export async function getStudentAcademicHistoryDocumentAction(studentId: string)
     const { data: activeEnrollment } = await (supabase.from("enrollments") as any)
       .select(`
         id,
-        enrollment_number,
+        enrollment_code,
         academic_year,
         course_name,
         grade_level,
@@ -3717,7 +3717,7 @@ export async function getStudentAcademicHistoryDocumentAction(studentId: string)
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("student_id", studentId)
-      .eq("status", "ativa")
+      .eq("status", "matriculado")
       .maybeSingle();
 
     if (activeEnrollment && activeEnrollment.class_id) {
@@ -3748,7 +3748,7 @@ export async function getStudentAcademicHistoryDocumentAction(studentId: string)
             course_name: activeEnrollment.course_name || activeEnrollment.school_classes?.series?.course?.name || "Educação Básica",
             school_class_name: activeEnrollment.school_classes?.name || "Turma Regular",
             shift: activeEnrollment.shift || "matutino",
-            enrollment_number: activeEnrollment.enrollment_number,
+            enrollment_number: activeEnrollment.enrollment_code || activeEnrollment.enrollment_number || null,
             enrollment_status: activeEnrollment.status,
             overall_average: rc.overall_average,
             overall_attendance_percentage: rc.overall_attendance_percentage,

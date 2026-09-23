@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "batchId": "batch_homolog_1790188113580",
+  "tenantSlug": "escola-modelo-homologacao",
+  "createdAt": "2026-09-23T18:28:33.580Z",
+  "updatedAt": "2026-09-23T18:47:06.611Z",
+  "createdRecords": {
+    "tenantId": "44146cf2-1363-4384-a23b-617cce527895",
+    "authUsers": [
+      {
+        "id": "705c331e-574f-4eb1-906f-dcef49af074a",
+        "email": "admin.homolog@educar360.local",
+        "preExisting": false
+      },
+      {
+        "id": "199679e5-8ee0-4619-b218-b0dbbb53668e",
+        "email": "secretaria.homolog@educar360.local",
+        "preExisting": false
+      },
+      {
+        "id": "6f33e23a-98ad-4c55-aae2-9a1e67328471",
+        "email": "prof.matematica@educar360.local",
+        "preExisting": false
+      },
+      {
+        "id": "cdf5a207-a940-4198-8bae-53531491a808",
+        "email": "prof.historia@educar360.local",
+        "preExisting": false
+      }
+    ],
+    "tenantUserIds": [
+      "03b7303d-c615-4946-a089-0ba06b2b72b0",
+      "56c6d57b-b2e2-49e0-ad2d-19f6a79c19f5",
+      "d32e48ad-0c6c-4a96-b9d6-e15f1a2182a7",
+      "f51b80eb-b035-4c59-a8b8-68ee276bb5b1"
+    ],
+    "courseIds": [
+      "6b18d138-0830-4b1c-ac62-99f9f7c85aa3"
+    ],
+    "seriesIds": [
+      "d0adf065-35bd-438c-9f72-730a70801867"
+    ],
+    "classIds": [
+      "1a96ecea-82bb-49e3-86a1-15762ef73ef8"
+    ],
+    "studentIds": [
+      "c28a275f-0ccc-44bc-9587-ea05e0efc45d",
+      "c364d89e-c25a-4539-9e5b-9ef8ac072ca3",
+      "72188a17-2a26-49af-865e-46e501ea3021"
+    ],
+    "enrollmentIds": [
+      "494bed44-7ad4-4a5c-ab09-2642fe9bee19",
+      "1813656c-d552-4121-b35b-7266f0da22a7",
+      "fa94a5e3-08a9-42eb-96dc-80205327122b"
+    ],
+    "teacherAllocationIds": [
+      "a737dcb0-8fb0-411e-a6d4-f7381eb93492"
+    ]
+  },
+  "functionalTestData": {
+    "lessonIds": [
+      "556e4698-40cb-4eaf-8fa8-ffeec645ce6a"
+    ],
+    "attendanceIds": [
+      "fac8f455-5ee7-4720-b9ff-ec7cf8013556",
+      "27b9f094-4d06-4ac4-8d09-7a79e933f163"
+    ],
+    "assessmentIds": [
+      "7f5e808f-97c0-479f-8ae1-479fb7cb1b87"
+    ],
+    "gradeIds": [
+      "366679ba-dc57-4c05-9146-f37891c359b0",
+      "638dc33c-9517-4e4a-b2df-72670e76cf1a"
+    ],
+    "historyRecordIds": [
+      "54d02371-e118-438d-a2a5-f3e4c36e0a93"
+    ]
+  }
+}
