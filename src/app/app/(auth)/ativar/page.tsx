@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState, Suspense } from "react";
+import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { validateInviteTokenAction, activateTenantAdminAction } from "@/app/actions/activate-invite";
 import { createClient } from "@/lib/supabase/client";
@@ -255,12 +256,17 @@ function ActivateAccountContent() {
 export default function ActivateAccountPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 mb-3">
-          <School className="w-8 h-8" />
-        </div>
-        <h1 className="text-2xl font-extrabold text-white">Educar360</h1>
-        <p className="text-xs text-slate-400 mt-1">Ambiente Escolar Oficial</p>
+      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center mb-6 flex flex-col items-center">
+        <Link href="/" className="inline-block transition-transform hover:scale-105">
+          <Image
+            src="/images/landing/logov_escuro.png"
+            alt="Educar360 - Ambiente Escolar Oficial"
+            width={180}
+            height={80}
+            priority
+            className="h-20 w-auto object-contain mx-auto"
+          />
+        </Link>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
