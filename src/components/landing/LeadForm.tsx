@@ -3,7 +3,14 @@
 import React, { useState } from "react";
 import { submitLeadAction } from "@/app/actions/leads";
 import { LeadInput } from "@/types/lead";
-import { OFFICIAL_SAAS_PLANS } from "@/lib/plans/constants";
+import {
+  OFFICIAL_SAAS_PLANS,
+  OFFICIAL_STUDENT_RANGES,
+  isPlanCompatibleWithRange,
+  getRecommendedPlanForRange,
+  getPlanByCode,
+} from "@/lib/plans/constants";
+import { formatPhoneBR, validateBrazilianPhone } from "@/lib/utils/phone";
 import {
   School,
   User,
@@ -15,6 +22,7 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
+  Info,
 } from "lucide-react";
 
 interface LeadFormProps {
@@ -22,28 +30,103 @@ interface LeadFormProps {
 }
 
 export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
+  const defaultRange = "201 a 500 alunos";
+  const compatibleInitialPlan = isPlanCompatibleWithRange(initialPlan, defaultRange)
+    ? initialPlan
+    : getRecommendedPlanForRange(defaultRange);
+
   const [formData, setFormData] = useState<LeadInput>({
     school_name: "",
     contact_name: "",
     email: "",
     phone: "",
     role_in_school: "Diretor(a) / Mantenedor(a)",
-    students_range: "100 a 200 alunos",
-    plan_interest: initialPlan,
+    students_range: defaultRange,
+    plan_interest: compatibleInitialPlan,
     message: "",
   });
 
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [planNotice, setPlanNotice] = useState<string | null>(null);
   const [onboardResult, setOnboardResult] = useState<any>(null);
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneBR(e.target.value);
+    setFormData((prev) => ({ ...prev, phone: formatted }));
+    if (errorMsg && errorMsg.includes("telefone") || errorMsg?.includes("WhatsApp") || errorMsg?.includes("DDD")) {
+      setErrorMsg(null);
+    }
+  };
+
+  const handleRangeChange = (newRange: string) => {
+    let newPlan = formData.plan_interest;
+    let notice: string | null = null;
+
+    if (newPlan && newPlan !== "indeciso" && !isPlanCompatibleWithRange(newPlan, newRange)) {
+      const recommended = getRecommendedPlanForRange(newRange);
+      const recPlanConfig = getPlanByCode(recommended);
+      const prevPlanConfig = getPlanByCode(newPlan);
+      notice = `O Plano ${prevPlanConfig?.name || newPlan} (${prevPlanConfig?.studentsFormatted || ""}) foi ajustado automaticamente para o Plano ${recPlanConfig?.name || recommended} (${recPlanConfig?.studentsFormatted || ""}) para atender à faixa de alunos selecionada.`;
+      newPlan = recommended;
+    }
+
+    setPlanNotice(notice);
+    setErrorMsg(null);
+    setFormData((prev) => ({
+      ...prev,
+      students_range: newRange,
+      plan_interest: newPlan,
+    }));
+  };
+
+  const handlePlanChange = (newPlan: string) => {
+    if (newPlan !== "indeciso" && !isPlanCompatibleWithRange(newPlan, formData.students_range)) {
+      const plan = getPlanByCode(newPlan);
+      setErrorMsg(
+        `O plano ${plan?.name} comporta ${plan?.studentsFormatted} e não é compatível com a quantidade selecionada (${formData.students_range}).`
+      );
+      return;
+    }
+    setPlanNotice(null);
+    setErrorMsg(null);
+    setFormData((prev) => ({ ...prev, plan_interest: newPlan }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
 
-    const result = await submitLeadAction(formData);
+    // Validação estrita do telefone brasileiro no cliente antes do envio
+    const phoneVal = validateBrazilianPhone(formData.phone);
+    if (!phoneVal.valid) {
+      setErrorMsg(phoneVal.error || "Por favor, informe um WhatsApp/Telefone brasileiro válido com DDD.");
+      setLoading(false);
+      return;
+    }
+
+    // Validação de coerência do plano selecionado
+    if (
+      formData.plan_interest &&
+      formData.plan_interest !== "indeciso" &&
+      !isPlanCompatibleWithRange(formData.plan_interest, formData.students_range)
+    ) {
+      const plan = getPlanByCode(formData.plan_interest);
+      setErrorMsg(
+        `O plano ${plan?.name || formData.plan_interest} suporta ${plan?.studentsFormatted} e é incompatível com a faixa de alunos selecionada (${formData.students_range}).`
+      );
+      setLoading(false);
+      return;
+    }
+
+    const payload: LeadInput = {
+      ...formData,
+      phone: phoneVal.formatted, // Normalizado para formato padrão do projeto (XX) XXXXX-XXXX
+    };
+
+    const result = await submitLeadAction(payload);
 
     if (result.success) {
       setOnboardResult(result);
@@ -231,10 +314,9 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
               <input
                 type="tel"
                 required
+                maxLength={15}
                 value={formData.phone}
-                onChange={(e) =>
-                  setFormData({ ...formData, phone: e.target.value })
-                }
+                onChange={handlePhoneChange}
                 placeholder="(11) 98765-4321"
                 className="w-full pl-10 pr-3.5 py-2.5 sm:py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 transition-all shadow-xs"
               />
@@ -266,42 +348,57 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
 
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Quantidade de Alunos
+              Quantidade de Alunos *
             </label>
             <select
               value={formData.students_range}
-              onChange={(e) =>
-                setFormData({ ...formData, students_range: e.target.value })
-              }
+              onChange={(e) => handleRangeChange(e.target.value)}
               className="w-full px-3 py-2.5 sm:py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 transition-all shadow-xs cursor-pointer"
             >
-              <option value="Até 100 alunos (Start)">Até 100 alunos (Start)</option>
-              <option value="100 a 200 alunos (Essencial)">100 a 200 alunos (Essencial)</option>
-              <option value="200 a 500 alunos (Profissional)">200 a 500 alunos (Profissional)</option>
-              <option value="Mais de 500 alunos (Enterprise)">Mais de 500 alunos (Enterprise)</option>
+              {OFFICIAL_STUDENT_RANGES.map((range) => (
+                <option key={range.value} value={range.value}>
+                  {range.label}
+                </option>
+              ))}
             </select>
           </div>
 
           <div className="sm:col-span-2 lg:col-span-1">
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Plano de Interesse
+              Plano de Interesse *
             </label>
             <select
               value={formData.plan_interest}
-              onChange={(e) =>
-                setFormData({ ...formData, plan_interest: e.target.value })
-              }
+              onChange={(e) => handlePlanChange(e.target.value)}
               className="w-full px-3 py-2.5 sm:py-3 bg-slate-50/70 hover:bg-slate-50 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600/30 focus:border-indigo-600 transition-all shadow-xs cursor-pointer"
             >
-              {OFFICIAL_SAAS_PLANS.map((plan) => (
-                <option key={plan.code} value={plan.code}>
-                  {plan.name} ({plan.priceFormatted}{plan.price_cents > 0 ? "/mês" : ""})
-                </option>
-              ))}
+              {OFFICIAL_SAAS_PLANS.map((plan) => {
+                const isCompatible = isPlanCompatibleWithRange(plan.code, formData.students_range);
+                const suffix = !isCompatible
+                  ? ` (Incompatível - ${plan.studentsFormatted})`
+                  : ` (${plan.studentsFormatted})`;
+                return (
+                  <option
+                    key={plan.code}
+                    value={plan.code}
+                    disabled={!isCompatible}
+                    className={!isCompatible ? "text-slate-400 bg-slate-100" : ""}
+                  >
+                    {plan.name} {suffix}
+                  </option>
+                );
+              })}
               <option value="indeciso">Ainda não sei / Quero avaliar</option>
             </select>
           </div>
         </div>
+
+        {planNotice && (
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-amber-800 text-xs">
+            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <span>{planNotice}</span>
+          </div>
+        )}
 
         {/* Linha 4: Observações */}
         <div>

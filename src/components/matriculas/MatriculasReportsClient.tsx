@@ -29,10 +29,26 @@ import {
   AlertCircle,
   FileText,
   User,
-  Search,
   RefreshCw,
   Users,
+  Printer,
 } from 'lucide-react';
+
+export interface InstitutionReportHeader {
+  name: string;
+  trade_name?: string | null;
+  cnpj?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  logo_url?: string | null;
+  address_street?: string | null;
+  address_number?: string | null;
+  address_complement?: string | null;
+  address_neighborhood?: string | null;
+  address_city?: string | null;
+  address_state?: string | null;
+  address_postal_code?: string | null;
+}
 
 interface MatriculasReportsClientProps {
   initialEnrollments: Enrollment[];
@@ -40,6 +56,7 @@ interface MatriculasReportsClientProps {
   seriesList?: Series[];
   schoolClasses?: SchoolClass[];
   tenantName: string;
+  institutionInfo?: InstitutionReportHeader;
   currentUserRole: string;
 }
 
@@ -77,6 +94,7 @@ export function MatriculasReportsClient({
   seriesList = [],
   schoolClasses = [],
   tenantName,
+  institutionInfo,
   currentUserRole,
 }: MatriculasReportsClientProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>(initialEnrollments);
@@ -106,12 +124,11 @@ export function MatriculasReportsClient({
   // Anos letivos disponíveis nos dados
   const availableYears = useMemo(() => {
     const years = new Set(enrollments.map((e) => e.academic_year));
-    years.add('2026');
-    years.add('2025');
+    if (years.size === 0) years.add(new Date().getFullYear().toString());
     return Array.from(years).sort().reverse();
   }, [enrollments]);
 
-  // Aplica filtros localmente
+  // Aplicação dos Filtros Locais
   const filteredEnrollments = useMemo(() => {
     return enrollments.filter((e) => {
       if (academicYearFilter !== 'all' && e.academic_year !== academicYearFilter) return false;
@@ -120,16 +137,30 @@ export function MatriculasReportsClient({
       if (gradeFilter !== 'all' && e.grade_level !== gradeFilter) return false;
       if (classFilter !== 'all' && e.class_id !== classFilter) return false;
       if (shiftFilter !== 'all' && e.shift !== shiftFilter) return false;
+
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const stdName = `${e.student?.first_name || ''} ${e.student?.last_name || ''}`.toLowerCase();
-        const code = e.enrollment_code.toLowerCase();
-        const className = e.school_class?.name?.toLowerCase() || '';
-        return stdName.includes(q) || code.includes(q) || className.includes(q);
+        const q = searchQuery.toLowerCase();
+        const codeMatch = e.enrollment_code.toLowerCase().includes(q);
+        const nameMatch = e.student
+          ? `${e.student.first_name} ${e.student.last_name}`.toLowerCase().includes(q)
+          : false;
+        const cpfMatch = e.student?.cpf ? e.student.cpf.replace(/\D/g, '').includes(q.replace(/\D/g, '')) : false;
+
+        if (!codeMatch && !nameMatch && !cpfMatch) return false;
       }
+
       return true;
     });
-  }, [enrollments, academicYearFilter, statusFilter, courseFilter, gradeFilter, classFilter, shiftFilter, searchQuery]);
+  }, [
+    enrollments,
+    academicYearFilter,
+    statusFilter,
+    courseFilter,
+    gradeFilter,
+    classFilter,
+    shiftFilter,
+    searchQuery,
+  ]);
 
   // Indicadores Numéricos Consolidados
   const metrics = useMemo(() => {
@@ -186,6 +217,22 @@ export function MatriculasReportsClient({
     return list;
   }, [filteredEnrollments]);
 
+  // Endereço completo formatado
+  const schoolAddressText = useMemo(() => {
+    if (!institutionInfo) return '';
+    const parts = [
+      institutionInfo.address_street,
+      institutionInfo.address_number ? `Nº ${institutionInfo.address_number}` : null,
+      institutionInfo.address_complement || null,
+      institutionInfo.address_neighborhood ? `Bairro ${institutionInfo.address_neighborhood}` : null,
+      institutionInfo.address_city && institutionInfo.address_state
+        ? `${institutionInfo.address_city}/${institutionInfo.address_state}`
+        : institutionInfo.address_city || institutionInfo.address_state || null,
+      institutionInfo.address_postal_code ? `CEP: ${institutionInfo.address_postal_code}` : null,
+    ].filter(Boolean);
+    return parts.join(' - ');
+  }, [institutionInfo]);
+
   // Recarrega dados com filtros do backend
   const handleRefresh = () => {
     startTransition(async () => {
@@ -219,20 +266,19 @@ export function MatriculasReportsClient({
         'Ano_Letivo',
         'Curso',
         'Serie',
-        'Turma',
         'Turno',
-        'Situacao',
-        'Data_Inscricao',
-        'Progresso_Documental',
+        'Turma',
+        'Situacao_Matricula',
+        'Docs_Percentual',
       ];
 
       const rows = filteredEnrollments.map((e) => {
         const studentName = e.student
           ? `"${e.student.first_name} ${e.student.last_name}"`
           : '"Aluno não informado"';
-        const progressStr = e.document_progress ? `"${e.document_progress.percent}%"` : '"0%"';
-        const statusLabel = ENROLLMENT_STATUS_LABELS[e.status]?.label || e.status;
-        const className = e.school_class?.name ? `"${e.school_class.name}"` : '"Aguardando enturmação"';
+        const className = e.school_class?.name ? `"${e.school_class.name}"` : '""';
+        const status = `"${ENROLLMENT_STATUS_LABELS[e.status]?.label || e.status}"`;
+        const progress = e.document_progress ? `"${e.document_progress.percent}%"` : '"0%"';
 
         return [
           e.enrollment_code,
@@ -240,11 +286,10 @@ export function MatriculasReportsClient({
           e.academic_year,
           `"${e.course_name}"`,
           `"${e.grade_level}"`,
+          `"${e.shift}"`,
           className,
-          e.shift,
-          `"${statusLabel}"`,
-          e.entry_date ? new Date(e.entry_date).toLocaleDateString('pt-BR') : '',
-          progressStr,
+          status,
+          progress,
         ].join(';');
       });
 
@@ -309,6 +354,336 @@ export function MatriculasReportsClient({
     }
   };
 
+  // Geração e Impressão de Relatório Oficial em PDF (Timbrado)
+  const handlePrintPdf = () => {
+    if (filteredEnrollments.length === 0) {
+      alert('Não há dados para gerar o relatório no filtro atual.');
+      return;
+    }
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('pt-BR');
+    const formattedTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    const logoHtml = institutionInfo?.logo_url
+      ? `<img src="${institutionInfo.logo_url}" alt="Logomarca" style="max-height: 60px; max-width: 140px; object-fit: contain;" />`
+      : `<div style="font-size: 26px; font-weight: bold; color: #4338ca;">🏫</div>`;
+
+    const schoolName = institutionInfo?.name || tenantName;
+    const tradeName = institutionInfo?.trade_name && institutionInfo.trade_name !== schoolName ? institutionInfo.trade_name : null;
+    const cnpj = institutionInfo?.cnpj ? `CNPJ: ${institutionInfo.cnpj}` : null;
+    const phone = institutionInfo?.phone ? `Tel: ${institutionInfo.phone}` : null;
+    const email = institutionInfo?.email ? `E-mail: ${institutionInfo.email}` : null;
+
+    const contactParts = [cnpj, phone, email].filter(Boolean).join(' &bull; ');
+
+    const appliedFilters = [
+      academicYearFilter !== 'all' ? `Ano: ${academicYearFilter}` : 'Ano: Todos',
+      courseFilter !== 'all' ? `Curso: ${courseFilter}` : null,
+      gradeFilter !== 'all' ? `Série: ${gradeFilter}` : null,
+      classFilter !== 'all' ? `Turma: ${schoolClasses.find(c => c.id === classFilter)?.name || classFilter}` : null,
+      shiftFilter !== 'all' ? `Turno: ${shiftFilter}` : null,
+      statusFilter !== 'all' ? `Situação: ${ENROLLMENT_STATUS_LABELS[statusFilter]?.label || statusFilter}` : null,
+      searchQuery ? `Busca: "${searchQuery}"` : null,
+    ].filter(Boolean).join(' | ');
+
+    const rowsHtml = activeTab === 'geral'
+      ? filteredEnrollments.map((enr, idx) => {
+          const studentName = enr.student ? `${enr.student.first_name} ${enr.student.last_name}` : 'Não informado';
+          const studentDoc = enr.student?.cpf ? `CPF: ${enr.student.cpf}` : (enr.student?.rg ? `RG: ${enr.student.rg}` : '-');
+          const className = enr.school_class?.name || (enr.class_id ? 'Turma' : '-');
+          const status = ENROLLMENT_STATUS_LABELS[enr.status]?.label || enr.status;
+
+          return `
+            <tr style="border-bottom: 1px solid #e2e8f0; font-size: 10.5px;">
+              <td style="padding: 7px 8px; text-align: center; color: #64748b; width: 30px;">${idx + 1}</td>
+              <td style="padding: 7px 8px; font-weight: 600; font-family: monospace; color: #334155; width: 125px;">${enr.enrollment_code}</td>
+              <td style="padding: 7px 8px; font-weight: 600; color: #0f172a;">${studentName}</td>
+              <td style="padding: 7px 8px; color: #475569; font-size: 9.5px; width: 110px;">${studentDoc}</td>
+              <td style="padding: 7px 8px; color: #334155; width: 150px;">${enr.course_name}</td>
+              <td style="padding: 7px 8px; color: #334155; width: 130px;">${enr.grade_level} <span style="color:#64748b; font-size:9.5px;">(${enr.shift})</span></td>
+              <td style="padding: 7px 8px; color: #334155; width: 100px;">${className}</td>
+              <td style="padding: 7px 8px; text-align: center; font-weight: 600; width: 110px;">${status}</td>
+            </tr>
+          `;
+        }).join('')
+      : documentPendingList.map(({ enrollment: enr, doc }, idx) => {
+          const studentName = enr.student ? `${enr.student.first_name} ${enr.student.last_name}` : 'Não informado';
+          const required = doc.is_required ? '<strong style="color:#dc2626;">Sim</strong>' : 'Não';
+          const statusDoc = doc.status === 'rejeitado' ? '<span style="color:#dc2626; font-weight:600;">Rejeitado</span>' : '<span style="color:#d97706; font-weight:600;">Pendente</span>';
+
+          return `
+            <tr style="border-bottom: 1px solid #e2e8f0; font-size: 10.5px;">
+              <td style="padding: 7px 8px; text-align: center; color: #64748b; width: 30px;">${idx + 1}</td>
+              <td style="padding: 7px 8px; font-weight: 600; font-family: monospace; width: 125px;">${enr.enrollment_code}</td>
+              <td style="padding: 7px 8px; font-weight: 600;">${studentName}</td>
+              <td style="padding: 7px 8px; width: 120px;">${enr.grade_level} (${enr.academic_year})</td>
+              <td style="padding: 7px 8px; font-weight: 600; color: #1e293b;">${doc.document_name}</td>
+              <td style="padding: 7px 8px; text-align: center; width: 80px;">${required}</td>
+              <td style="padding: 7px 8px; text-align: center; width: 90px;">${statusDoc}</td>
+              <td style="padding: 7px 8px; color: #64748b; font-size: 9.5px;">${doc.notes || '-'}</td>
+            </tr>
+          `;
+        }).join('');
+
+    const headersHtml = activeTab === 'geral'
+      ? `
+        <tr style="background-color: #f1f5f9; color: #1e293b; font-size: 10.5px; text-align: left; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+          <th style="padding: 8px; width: 30px; text-align: center;">#</th>
+          <th style="padding: 8px; width: 125px;">Código</th>
+          <th style="padding: 8px;">Nome do Aluno</th>
+          <th style="padding: 8px; width: 110px;">Documento</th>
+          <th style="padding: 8px; width: 150px;">Curso / Segmento</th>
+          <th style="padding: 8px; width: 130px;">Série / Turno</th>
+          <th style="padding: 8px; width: 100px;">Turma</th>
+          <th style="padding: 8px; text-align: center; width: 110px;">Situação</th>
+        </tr>
+      `
+      : `
+        <tr style="background-color: #f1f5f9; color: #1e293b; font-size: 10.5px; text-align: left; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+          <th style="padding: 6px; width: 28px; text-align: center;">#</th>
+          <th style="padding: 6px; width: 100px;">Código</th>
+          <th style="padding: 6px;">Aluno</th>
+          <th style="padding: 6px;">Série / Ano</th>
+          <th style="padding: 6px;">Documento Pendente</th>
+          <th style="padding: 6px; text-align: center;">Obrigatório</th>
+          <th style="padding: 6px; text-align: center;">Situação</th>
+          <th style="padding: 6px;">Observações</th>
+        </tr>
+      `;
+
+    const titleReport = activeTab === 'geral'
+      ? 'RELATÓRIO GERAL DE MATRÍCULAS E OCUPAÇÃO DE VAGAS'
+      : 'RELATÓRIO DE PENDÊNCIAS E CONFORMIDADE DOCUMENTAL';
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Por favor, permita popups no navegador para gerar a impressão do relatório em PDF.');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <title>${titleReport} - ${schoolName}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 10mm 12mm 12mm 12mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #0f172a;
+            margin: 0;
+            padding: 0;
+            font-size: 10.5px;
+            line-height: 1.35;
+          }
+          .header-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #334155;
+            margin-bottom: 12px;
+          }
+          .header-logo {
+            flex-shrink: 0;
+          }
+          .header-text {
+            flex: 1;
+            text-align: right;
+          }
+          .header-school-name {
+            font-size: 14px;
+            font-weight: 800;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
+          .header-trade-name {
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+          }
+          .header-meta {
+            font-size: 9.5px;
+            color: #64748b;
+            margin-top: 1px;
+          }
+          .report-title-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #4f46e5;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .report-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #1e1b4b;
+            text-transform: uppercase;
+            margin: 0;
+          }
+          .report-date {
+            font-size: 9.5px;
+            color: #475569;
+          }
+          .filters-bar {
+            font-size: 9px;
+            color: #475569;
+            background-color: #f1f5f9;
+            padding: 5px 8px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+          }
+          .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+          }
+          .stat-item {
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            padding: 4px 6px;
+            border-radius: 4px;
+            text-align: center;
+          }
+          .stat-val {
+            font-size: 13px;
+            font-weight: 800;
+            color: #0f172a;
+          }
+          .stat-lbl {
+            font-size: 8px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tbody tr {
+            page-break-inside: avoid;
+          }
+          tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+          }
+          .signatures-box {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-around;
+            page-break-inside: avoid;
+          }
+          .sig-line {
+            width: 260px;
+            border-top: 1px solid #94a3b8;
+            text-align: center;
+            padding-top: 4px;
+            font-size: 9.5px;
+            color: #334155;
+            font-weight: 600;
+          }
+          .footer-note {
+            margin-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
+            font-size: 8px;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">
+          <div class="header-logo">
+            ${logoHtml}
+          </div>
+          <div class="header-text">
+            <div class="header-school-name">${schoolName}</div>
+            ${tradeName ? `<div class="header-trade-name">${tradeName}</div>` : ''}
+            ${contactParts ? `<div class="header-meta">${contactParts}</div>` : ''}
+            ${schoolAddressText ? `<div class="header-meta">${schoolAddressText}</div>` : ''}
+          </div>
+        </div>
+
+        <div class="report-title-box">
+          <h2 class="report-title">${titleReport}</h2>
+          <div class="report-date">Emitido em: <strong>${formattedDate} às ${formattedTime}</strong></div>
+        </div>
+
+        <div class="filters-bar">
+          <strong>Filtros aplicados:</strong> ${appliedFilters}
+        </div>
+
+        ${activeTab === 'geral' ? `
+          <div class="stats-cards">
+            <div class="stat-item"><div class="stat-val">${metrics.total}</div><div class="stat-lbl">Total Filtrado</div></div>
+            <div class="stat-item"><div class="stat-val" style="color: #059669;">${metrics.matriculados}</div><div class="stat-lbl">Matriculados</div></div>
+            <div class="stat-item"><div class="stat-val" style="color: #d97706;">${metrics.preMatricula}</div><div class="stat-lbl">Pré-Matrículas</div></div>
+            <div class="stat-item"><div class="stat-val" style="color: #2563eb;">${metrics.emAnalise}</div><div class="stat-lbl">Em Análise</div></div>
+            <div class="stat-item"><div class="stat-val" style="color: #7c3aed;">${metrics.transferidos}</div><div class="stat-lbl">Transferidos</div></div>
+            <div class="stat-item"><div class="stat-val" style="color: #e11d48;">${metrics.cancelados}</div><div class="stat-lbl">Cancelados</div></div>
+          </div>
+        ` : ''}
+
+        <table>
+          <thead>
+            ${headersHtml}
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+
+        <div class="signatures-box">
+          <div class="sig-line">
+            Secretaria Escolar / Emissor
+          </div>
+          <div class="sig-line">
+            Direção / Coordenação Pedagógica
+          </div>
+        </div>
+
+        <div class="footer-note">
+          <span>Educar360 &bull; Sistema de Gestão Escolar Integrada</span>
+          <span>Página Oficial &bull; Relatório emitido em ${formattedDate} ${formattedTime}</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Feedback */}
@@ -356,10 +731,21 @@ export function MatriculasReportsClient({
           <button
             type="button"
             onClick={handleExportCSV}
-            className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+            title="Exportar dados filtrados em formato CSV/Excel"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-4 h-4 text-emerald-600" />
             <span>Exportar CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrintPdf}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
+            title="Imprimir ou Salvar em PDF com timbre oficial da instituição"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Gerar PDF</span>
           </button>
         </div>
       </div>

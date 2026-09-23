@@ -21,8 +21,9 @@ export async function updateSession(request: NextRequest) {
   const isTenantAppSubdomain = host.startsWith("app.");
 
   // Identificação de compatibilidade para desenvolvimento local ou caminhos diretos
+  const isDirectTenantAuthRoute = rawPathname === "/ativar" || rawPathname === "/login";
   const isPlatformAdminHost = isPlatformAdminSubdomain || rawPathname.startsWith("/admin");
-  const isTenantAppHost = isTenantAppSubdomain || rawPathname.startsWith("/app");
+  const isTenantAppHost = isTenantAppSubdomain || rawPathname.startsWith("/app") || isDirectTenantAuthRoute;
   const isLandingHost = !isPlatformAdminHost && !isTenantAppHost;
 
   // 1. REGRAS DA LANDING PAGE (www.educar360.com.br / educar360.com.br / localhost padrão)
@@ -30,11 +31,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Rewrite transparente para subdomínios (mantém URL limpa sem /app ou /admin visível)
+  // Rewrite transparente para subdomínios ou rotas de autenticação sem prefixo (mantém URL limpa)
   let effectivePathname = rawPathname;
   let shouldRewrite = false;
 
-  if (isTenantAppSubdomain && !rawPathname.startsWith("/app")) {
+  if ((isTenantAppSubdomain || isDirectTenantAuthRoute) && !rawPathname.startsWith("/app")) {
     effectivePathname = rawPathname === "/" ? "/app/dashboard" : `/app${rawPathname}`;
     shouldRewrite = true;
   } else if (isPlatformAdminSubdomain && !rawPathname.startsWith("/admin")) {

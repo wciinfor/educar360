@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   TenantInstitutionData,
   SchoolGatewayConfig,
@@ -35,6 +35,8 @@ import {
   Info,
   Clock,
   Check,
+  Upload,
+  Trash2,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -64,6 +66,143 @@ export function GeralTabsClient({
   const [institution, setInstitution] = useState<TenantInstitutionData>(initialInstitution);
   const [savingInst, setSavingInst] = useState(false);
   const [instFeedback, setInstFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+
+  function maskCep(val: string) {
+    return val
+      .replace(/\D/g, "")
+      .slice(0, 8)
+      .replace(/(\d{5})(\d)/, "$1-$2");
+  }
+
+  function maskCnpj(val: string) {
+    const raw = val.replace(/\D/g, "").slice(0, 14);
+    if (raw.length <= 2) return raw;
+    if (raw.length <= 5) return raw.replace(/^(\d{2})(\d+)/, "$1.$2");
+    if (raw.length <= 8) return raw.replace(/^(\d{2})(\d{3})(\d+)/, "$1.$2.$3");
+    if (raw.length <= 12) return raw.replace(/^(\d{2})(\d{3})(\d{3})(\d+)/, "$1.$2.$3/$4");
+    return raw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, "$1.$2.$3/$4-$5");
+  }
+
+  function maskPhone(val: string) {
+    const raw = val.replace(/\D/g, "").slice(0, 11);
+    if (raw.length <= 2) return raw;
+    if (raw.length <= 6) return raw.replace(/^(\d{2})(\d+)/, "($1) $2");
+    if (raw.length <= 10) return raw.replace(/^(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
+    return raw.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  }
+
+  async function handleCepSearch(rawCep: string) {
+    const cep = rawCep.replace(/\D/g, "");
+    if (cep.length === 8) {
+      try {
+        setIsSearchingCep(true);
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setInstitution((prev) => ({
+            ...prev,
+            address_postal_code: maskCep(cep),
+            address_street: data.logradouro || prev.address_street,
+            address_neighborhood: data.bairro || prev.address_neighborhood,
+            address_city: data.localidade || prev.address_city,
+            address_state: data.uf ? data.uf.toUpperCase() : prev.address_state,
+          }));
+        }
+      } catch {
+        // falha silenciosa se offline
+      } finally {
+        setIsSearchingCep(false);
+      }
+    }
+  }
+
+  const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setInstFeedback({
+        type: "error",
+        text: "Por favor, selecione um arquivo de imagem válido (PNG, JPG, SVG, WebP).",
+      });
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setInstFeedback({
+        type: "error",
+        text: "A imagem da logomarca deve ter no máximo 5MB.",
+      });
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      setIsUploadingLogo(true);
+      const optimizedDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Erro ao ler arquivo da logomarca."));
+        reader.onload = (event) => {
+          const rawResult = event.target?.result as string;
+
+          // Se for SVG, não precisa de canvas
+          if (file.type === "image/svg+xml") {
+            resolve(rawResult);
+            return;
+          }
+
+          const img = new Image();
+          img.onerror = () => reject(new Error("Erro ao decodificar imagem."));
+          img.onload = () => {
+            const maxDim = 500;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(rawResult);
+              return;
+            }
+
+            ctx.drawImage(img, 0, 0, width, height);
+            // Salva como PNG para preservar fundo transparente
+            const compressed = canvas.toDataURL("image/png");
+            resolve(compressed);
+          };
+          img.src = rawResult;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      setInstitution((prev) => ({ ...prev, logo_url: optimizedDataUrl }));
+      setInstFeedback(null);
+    } catch (err: any) {
+      setInstFeedback({
+        type: "error",
+        text: err?.message || "Erro ao processar imagem da logomarca.",
+      });
+    } finally {
+      setIsUploadingLogo(false);
+      e.target.value = "";
+    }
+  };
 
   const handleSaveInstitution = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,13 +210,21 @@ export function GeralTabsClient({
     setSavingInst(true);
     setInstFeedback(null);
 
-    const res = await updateInstitutionDataAction(institution);
-    if (res.success) {
-      setInstFeedback({ type: "success", text: "Dados cadastrais atualizados com sucesso!" });
-    } else {
-      setInstFeedback({ type: "error", text: res.error || "Erro ao salvar alterações." });
+    try {
+      const res = await updateInstitutionDataAction(institution);
+      if (res.success) {
+        setInstFeedback({ type: "success", text: "Dados cadastrais atualizados com sucesso!" });
+      } else {
+        setInstFeedback({ type: "error", text: res.error || "Erro ao salvar alterações." });
+      }
+    } catch (err: any) {
+      setInstFeedback({
+        type: "error",
+        text: err?.message || "Erro de conexão ao salvar os dados.",
+      });
+    } finally {
+      setSavingInst(false);
     }
-    setSavingInst(false);
   };
 
   // ==========================================
@@ -140,6 +287,28 @@ export function GeralTabsClient({
     }
     setRequestingUpgrade(null);
   };
+
+  // Auto-remover mensagens de feedback após 4 segundos
+  useEffect(() => {
+    if (instFeedback) {
+      const timer = setTimeout(() => setInstFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [instFeedback]);
+
+  useEffect(() => {
+    if (gwFeedback) {
+      const timer = setTimeout(() => setGwFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [gwFeedback]);
+
+  useEffect(() => {
+    if (planFeedback) {
+      const timer = setTimeout(() => setPlanFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [planFeedback]);
 
   return (
     <div className="space-y-6">
@@ -274,9 +443,12 @@ export function GeralTabsClient({
                 <input
                   type="text"
                   disabled={!isAdmin}
+                  maxLength={18}
                   placeholder="00.000.000/0000-00"
                   value={institution.cnpj || ""}
-                  onChange={(e) => setInstitution({ ...institution, cnpj: e.target.value })}
+                  onChange={(e) =>
+                    setInstitution({ ...institution, cnpj: maskCnpj(e.target.value) })
+                  }
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60 font-mono"
                 />
               </div>
@@ -301,25 +473,91 @@ export function GeralTabsClient({
                 <input
                   type="text"
                   disabled={!isAdmin}
+                  maxLength={15}
                   placeholder="(00) 00000-0000"
                   value={institution.phone || ""}
-                  onChange={(e) => setInstitution({ ...institution, phone: e.target.value })}
+                  onChange={(e) =>
+                    setInstitution({ ...institution, phone: maskPhone(e.target.value) })
+                  }
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  URL da Logomarca (ou link de imagem)
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Logomarca da Instituição
                 </label>
-                <input
-                  type="url"
-                  disabled={!isAdmin}
-                  placeholder="https://exemplo.com.br/logo.png"
-                  value={institution.logo_url || ""}
-                  onChange={(e) => setInstitution({ ...institution, logo_url: e.target.value })}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60"
-                />
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 w-full sm:w-auto">
+                    {institution.logo_url ? (
+                      <div className="relative w-14 h-14 rounded-xl border border-slate-200 bg-white p-1.5 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={institution.logo_url}
+                          alt="Logomarca da Instituição"
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl border border-dashed border-slate-300 bg-white flex items-center justify-center shrink-0 text-slate-400">
+                        <Building2 className="w-6 h-6" />
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-800">
+                        {institution.logo_url
+                          ? "Logomarca Carregada"
+                          : "Nenhuma Logomarca Selecionada"}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        {institution.logo_url
+                          ? "Exibida em cabeçalhos, carteirinhas e documentos."
+                          : "Formatos suportados: PNG, JPG, WebP ou SVG (máx. 5MB)."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/*"
+                      disabled={!isAdmin || isUploadingLogo}
+                      onChange={handleLogoFileChange}
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      disabled={!isAdmin || isUploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 transition-all shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                    >
+                      {isUploadingLogo ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {institution.logo_url ? "Alterar Imagem" : "Fazer Upload"}
+                      </span>
+                    </button>
+
+                    {institution.logo_url && (
+                      <button
+                        type="button"
+                        disabled={!isAdmin || isUploadingLogo}
+                        onClick={() => setInstitution({ ...institution, logo_url: null })}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 transition-all shrink-0 cursor-pointer disabled:opacity-50 shadow-2xs"
+                        title="Remover logomarca"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remover</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -328,7 +566,36 @@ export function GeralTabsClient({
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Endereço Físico da Unidade
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    CEP (Autocompletar)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled={!isAdmin}
+                      placeholder="00000-000"
+                      maxLength={9}
+                      value={institution.address_postal_code || ""}
+                      onChange={(e) => {
+                        const masked = maskCep(e.target.value);
+                        setInstitution({ ...institution, address_postal_code: masked });
+                        if (masked.replace(/\D/g, "").length === 8) {
+                          handleCepSearch(masked);
+                        }
+                      }}
+                      onBlur={(e) => handleCepSearch(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all pr-8"
+                    />
+                    {isSearchingCep && (
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-3.5 h-3.5 text-indigo-600 animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="sm:col-span-2">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Logradouro (Rua, Av, Travessa)
@@ -340,10 +607,11 @@ export function GeralTabsClient({
                     onChange={(e) =>
                       setInstitution({ ...institution, address_street: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all"
                   />
                 </div>
-                <div>
+
+                <div className="sm:col-span-1">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Número
                   </label>
@@ -354,10 +622,11 @@ export function GeralTabsClient({
                     onChange={(e) =>
                       setInstitution({ ...institution, address_number: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all"
                   />
                 </div>
-                <div>
+
+                <div className="sm:col-span-2">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Bairro
                   </label>
@@ -368,10 +637,11 @@ export function GeralTabsClient({
                     onChange={(e) =>
                       setInstitution({ ...institution, address_neighborhood: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all"
                   />
                 </div>
-                <div>
+
+                <div className="sm:col-span-1">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     Cidade
                   </label>
@@ -382,10 +652,11 @@ export function GeralTabsClient({
                     onChange={(e) =>
                       setInstitution({ ...institution, address_city: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all"
                   />
                 </div>
-                <div>
+
+                <div className="sm:col-span-1">
                   <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                     UF / Estado
                   </label>
@@ -398,7 +669,7 @@ export function GeralTabsClient({
                     onChange={(e) =>
                       setInstitution({ ...institution, address_state: e.target.value.toUpperCase() })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 uppercase font-mono"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 disabled:opacity-60 uppercase font-mono focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all"
                   />
                 </div>
               </div>

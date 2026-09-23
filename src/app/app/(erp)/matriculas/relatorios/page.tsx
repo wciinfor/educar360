@@ -41,6 +41,23 @@ export default async function MatriculasReportsPage() {
   const series = seriesRes.success ? seriesRes.series : [];
   const schoolClasses = classesRes.success ? classesRes.schoolClasses : [];
 
+  const settings = (session.tenant.settings as Record<string, any>) || {};
+  const institutionInfo = {
+    name: session.tenant.name,
+    trade_name: session.tenant.trade_name || session.tenant.name,
+    cnpj: session.tenant.cnpj || null,
+    email: session.tenant.email || null,
+    phone: session.tenant.phone || null,
+    logo_url: settings.logo_url || null,
+    address_street: settings.address_street || null,
+    address_number: settings.address_number || null,
+    address_complement: settings.address_complement || null,
+    address_neighborhood: settings.address_neighborhood || null,
+    address_city: settings.address_city || null,
+    address_state: settings.address_state || null,
+    address_postal_code: settings.address_postal_code || null,
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
       <MatriculasReportsClient
@@ -49,6 +66,7 @@ export default async function MatriculasReportsPage() {
         seriesList={series}
         schoolClasses={schoolClasses}
         tenantName={session.tenant.name}
+        institutionInfo={institutionInfo}
         currentUserRole={session.role}
       />
     </div>

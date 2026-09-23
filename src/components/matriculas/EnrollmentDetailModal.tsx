@@ -16,11 +16,8 @@ import {
   Phone,
   Mail,
   MapPin,
-  FileCheck,
   History,
-  Edit,
   Clock,
-  ChevronDown,
   CheckCircle2,
   AlertCircle,
   ShieldCheck,
@@ -28,18 +25,17 @@ import {
   Sparkles,
   Layers,
   FileText,
-  Lock,
 } from 'lucide-react';
 
 interface EnrollmentDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   enrollmentId: string;
-  currentUserRole: string;
-  onOpenChecklist: (enrollment: Enrollment) => void;
-  onOpenEdit: (enrollment: Enrollment) => void;
-  onOpenHistory: (enrollment: Enrollment) => void;
-  onOpenStatusChange: (enrollment: Enrollment) => void;
+  currentUserRole?: string;
+  onOpenChecklist?: (enrollment: Enrollment) => void;
+  onOpenEdit?: (enrollment: Enrollment) => void;
+  onOpenHistory?: (enrollment: Enrollment) => void;
+  onOpenStatusChange?: (enrollment: Enrollment) => void;
 }
 
 export function EnrollmentDetailModal({
@@ -86,21 +82,6 @@ export function EnrollmentDetailModal({
   }, [isOpen, enrollmentId]);
 
   if (!isOpen) return null;
-
-  const canEditAcademic =
-    (currentUserRole === 'admin_escola' ||
-      currentUserRole === 'super_admin' ||
-      currentUserRole === 'secretaria' ||
-      currentUserRole === 'coordenacao') &&
-    enrollment?.status !== 'cancelado' &&
-    enrollment?.status !== 'transferido';
-
-  const canChangeStatus =
-    currentUserRole === 'admin_escola' ||
-    currentUserRole === 'super_admin' ||
-    currentUserRole === 'secretaria' ||
-    currentUserRole === 'coordenacao' ||
-    currentUserRole === 'comercial';
 
   const studentName = enrollment?.student
     ? `${enrollment.student.first_name} ${enrollment.student.last_name}`
@@ -209,48 +190,6 @@ export function EnrollmentDetailModal({
                   {enrollment.history?.length || 0}
                 </span>
               </button>
-            </div>
-
-            {/* Ações Rápidas de Gestão */}
-            <div className="flex items-center space-x-1.5">
-              {canEditAcademic ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenEdit(enrollment)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
-                >
-                  <Edit className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Editar Dados</span>
-                </button>
-              ) : (
-                <span
-                  title="Edição restrita ou matrícula encerrada"
-                  className="px-2.5 py-1 text-[11px] font-medium text-slate-400 bg-slate-200/60 rounded-lg flex items-center space-x-1"
-                >
-                  <Lock className="w-3 h-3" />
-                  <span>Edição Bloqueada</span>
-                </span>
-              )}
-
-              <button
-                type="button"
-                onClick={() => onOpenChecklist(enrollment)}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors flex items-center space-x-1.5 cursor-pointer"
-              >
-                <FileCheck className="w-3.5 h-3.5" />
-                <span>Conferir Documentos</span>
-              </button>
-
-              {canChangeStatus && (
-                <button
-                  type="button"
-                  onClick={() => onOpenStatusChange(enrollment)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
-                >
-                  <span>Alterar Situação</span>
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -475,13 +414,15 @@ export function EnrollmentDetailModal({
                           style={{ width: `${progress.percent}%` }}
                         />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onOpenChecklist(enrollment)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-xs"
-                      >
-                        Abrir Conferência
-                      </button>
+                      {onOpenChecklist && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenChecklist(enrollment)}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-xs"
+                        >
+                          Abrir Conferência
+                        </button>
+                      )}
                     </div>
                   </div>
 

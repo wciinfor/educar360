@@ -1,4 +1,4 @@
-﻿import { SaasPlan } from "@/types/platform";
+import { SaasPlan } from "@/types/platform";
 
 export interface CommercialPlanConfig extends SaasPlan {
   highlight?: boolean;
@@ -116,3 +116,113 @@ export const OFFICIAL_SAAS_PLANS: CommercialPlanConfig[] = [
 export function getPlanByCode(code: string): CommercialPlanConfig | undefined {
   return OFFICIAL_SAAS_PLANS.find((p) => p.code === code);
 }
+
+export interface StudentRangeConfig {
+  value: string;
+  label: string;
+  minStudents: number;
+  maxStudents: number | null;
+  defaultPlanCode: string;
+}
+
+export const OFFICIAL_STUDENT_RANGES: StudentRangeConfig[] = [
+  {
+    value: "Até 100 alunos",
+    label: "Até 100 alunos (Start)",
+    minStudents: 1,
+    maxStudents: 100,
+    defaultPlanCode: "start",
+  },
+  {
+    value: "101 a 200 alunos",
+    label: "101 a 200 alunos (Essencial)",
+    minStudents: 101,
+    maxStudents: 200,
+    defaultPlanCode: "essencial",
+  },
+  {
+    value: "201 a 500 alunos",
+    label: "201 a 500 alunos (Profissional)",
+    minStudents: 201,
+    maxStudents: 500,
+    defaultPlanCode: "profissional",
+  },
+  {
+    value: "Mais de 500 alunos",
+    label: "Mais de 500 alunos (Enterprise - a partir de 501)",
+    minStudents: 501,
+    maxStudents: null,
+    defaultPlanCode: "enterprise",
+  },
+];
+
+/**
+ * Obtém o valor numérico mínimo de alunos a partir do texto/código da faixa informada.
+ */
+export function getRangeMinStudents(rangeValue?: string | null): number {
+  if (!rangeValue) return 1;
+  const normalized = rangeValue.toLowerCase();
+  
+  if (
+    normalized.includes("501") ||
+    normalized.includes("mais de 500") ||
+    normalized.includes("acima de 500") ||
+    normalized.includes("700") ||
+    normalized.includes("enterprise")
+  ) {
+    if (normalized.includes("200 a 500") || normalized.includes("201 a 500")) return 201;
+    return 501;
+  }
+  
+  if (normalized.includes("201") || normalized.includes("200 a 500") || normalized.includes("300")) {
+    return 201;
+  }
+  
+  if (normalized.includes("101") || normalized.includes("100 a 200")) {
+    return 101;
+  }
+
+  return 1;
+}
+
+/**
+ * Verifica se um plano é compatível com a quantidade/faixa de alunos informada.
+ * Regra: Não permite escolher um plano cujo limite máximo seja inferior ao mínimo da faixa.
+ */
+export function isPlanCompatibleWithRange(planCode: string, rangeValue?: string | null): boolean {
+  if (!planCode || planCode === "indeciso") return true;
+  const plan = getPlanByCode(planCode);
+  if (!plan) return false;
+
+  const minStudents = getRangeMinStudents(rangeValue);
+  
+  // Se o plano tem limite máximo (Start: 100, Essencial: 200, Profissional: 500)
+  // e esse limite for inferior ao mínimo da faixa, é incompatível.
+  if (plan.max_students !== null && plan.max_students < minStudents) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Retorna todos os planos oficiais compatíveis com uma faixa de alunos.
+ */
+export function getCompatiblePlansForRange(rangeValue?: string | null): CommercialPlanConfig[] {
+  return OFFICIAL_SAAS_PLANS.filter((plan) => isPlanCompatibleWithRange(plan.code, rangeValue));
+}
+
+/**
+ * Retorna o plano mais adequado/recomendado para a faixa informada.
+ */
+export function getRecommendedPlanForRange(rangeValue?: string | null): string {
+  const minStudents = getRangeMinStudents(rangeValue);
+  const matchedRange = OFFICIAL_STUDENT_RANGES.find((r) => r.minStudents === minStudents);
+  if (matchedRange) return matchedRange.defaultPlanCode;
+  
+  if (minStudents >= 501) return "enterprise";
+  if (minStudents >= 201) return "profissional";
+  if (minStudents >= 101) return "essencial";
+  return "start";
+}
+

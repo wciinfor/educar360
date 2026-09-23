@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LeadInput, LeadResponse } from "@/types/lead";
 import { sendTenantInviteEmail } from "@/lib/email/resend";
-import { getPlanByCode } from "@/lib/plans/constants";
+import { getPlanByCode, isPlanCompatibleWithRange } from "@/lib/plans/constants";
+import { validateBrazilianPhone } from "@/lib/utils/phone";
 import { getActivationUrl } from "@/lib/urls";
 import { revalidatePath } from "next/cache";
 
@@ -21,14 +22,23 @@ export async function submitLeadAction(data: LeadInput): Promise<LeadResponse> {
     const schoolName = data.school_name?.trim();
     const contactName = data.contact_name?.trim();
     const email = data.email?.trim().toLowerCase();
-    const phone = data.phone?.trim();
 
-    if (!schoolName || !contactName || !email || !phone) {
+    if (!schoolName || !contactName || !email || !data.phone?.trim()) {
       return {
         success: false,
         message: "Por favor, preencha todos os campos obrigatórios (Escola, Nome, E-mail e WhatsApp).",
       };
     }
+
+    // Validação estrita do telefone brasileiro no servidor (DDD + 10 ou 11 dígitos)
+    const phoneValidation = validateBrazilianPhone(data.phone);
+    if (!phoneValidation.valid) {
+      return {
+        success: false,
+        message: phoneValidation.error || "Por favor, informe um telefone/WhatsApp brasileiro válido com DDD.",
+      };
+    }
+    const phone = phoneValidation.formatted;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
@@ -39,6 +49,16 @@ export async function submitLeadAction(data: LeadInput): Promise<LeadResponse> {
     }
 
     const planCode = data.plan_interest || "profissional";
+
+    // Validação de compatibilidade entre Quantidade de Alunos e Plano Escolhido
+    if (planCode !== "indeciso" && !isPlanCompatibleWithRange(planCode, data.students_range)) {
+      const plan = getPlanByCode(planCode);
+      return {
+        success: false,
+        message: `O plano ${plan?.name || planCode} suporta ${plan?.studentsFormatted || "menos alunos"} e é incompatível com a quantidade de alunos selecionada (${data.students_range || "não informada"}).`,
+      };
+    }
+
     const planConfig = getPlanByCode(planCode) || getPlanByCode("profissional");
     const planName = planConfig?.name || "Profissional";
     const inviteToken = `inv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;

@@ -680,7 +680,6 @@ export function MatriculasClient({
                 <th className="py-3 px-4">Aluno</th>
                 <th className="py-3 px-4">Código / Ano</th>
                 <th className="py-3 px-4">Série / Turno</th>
-                <th className="py-3 px-4">Responsável Legal</th>
                 <th className="py-3 px-4">Documentação</th>
                 <th className="py-3 px-4">Situação</th>
                 <th className="py-3 px-4 text-right">Ações</th>
@@ -689,7 +688,7 @@ export function MatriculasClient({
             <tbody className="divide-y divide-slate-100">
               {filteredEnrollments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
                     <GraduationCap className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-500" />
                     <p className="text-xs font-medium text-slate-600">
                       Nenhuma matrícula encontrada para os filtros selecionados.
@@ -763,24 +762,6 @@ export function MatriculasClient({
                           <div className="mt-1 text-[10px] text-slate-400 italic">
                             Sem turma vinculada
                           </div>
-                        )}
-                      </td>
-
-                      {/* Responsável */}
-                      <td className="py-3 px-4">
-                        {item.guardian ? (
-                          <div>
-                            <span className="font-medium text-slate-800 block">
-                              {item.guardian.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              {item.guardian.phone || item.guardian.email || "Contato não inf."}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic text-[11px]">
-                            Sem responsável vinculado
-                          </span>
                         )}
                       </td>
 
