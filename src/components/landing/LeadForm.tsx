@@ -173,16 +173,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
           </p>
         </div>
 
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-          {onboardResult.activation_url && (
-            <a
-              href={onboardResult.activation_url}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm sm:text-base text-white bg-emerald-500 hover:bg-emerald-600 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 hover:scale-[1.02]"
-            >
-              <span>Ativar meu acesso agora</span>
-              <span>→</span>
-            </a>
-          )}
+        <div className="pt-2 flex items-center justify-center">
           <button
             type="button"
             onClick={() => {
@@ -199,7 +190,7 @@ export function LeadForm({ initialPlan = "profissional" }: LeadFormProps) {
                 message: "",
               });
             }}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
+            className="w-full sm:w-auto px-8 py-3 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors shadow-xs"
           >
             Cadastrar outra instituição
           </button>
