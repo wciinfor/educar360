@@ -13,22 +13,23 @@ export async function validateInviteTokenAction(token: string): Promise<InviteDe
       return { valid: false, message: "Token de convite não informado." };
     }
 
-    const supabase = await createClient();
+    const cleanToken = token.trim();
+    const adminClient = createAdminClient();
 
-    // Consulta via RPC
-    const { data, error } = await (supabase as any).rpc("get_invite_details", {
-      p_token: token.trim(),
+    // 1. Consulta via RPC caso exista no banco
+    const { data, error } = await (adminClient as any).rpc("get_invite_details", {
+      p_token: cleanToken,
     });
 
-    if (!error && data) {
+    if (!error && data && data.valid) {
       return data as InviteDetails;
     }
 
-    // Fallback: consulta direta nas tabelas com validação de expiração e status
-    const { data: tenant, error: tErr } = await (supabase.from("tenants") as any)
+    // 2. Fallback: consulta direta nas tabelas via adminClient (bypassa RLS com segurança para conferir token)
+    const { data: tenant, error: tErr } = await (adminClient.from("tenants") as any)
       .select("id, name, slug, status, email, invite_status, invite_admin_email, invite_expires_at")
-      .eq("invite_token", token.trim())
-      .single();
+      .eq("invite_token", cleanToken)
+      .maybeSingle();
 
     if (tErr || !tenant) {
       return { valid: false, message: "Convite não encontrado ou inválido." };
@@ -52,11 +53,11 @@ export async function validateInviteTokenAction(token: string): Promise<InviteDe
     }
 
     // Busca o vínculo de admin_escola
-    const { data: tu } = await (supabase.from("tenant_users") as any)
+    const { data: tu } = await (adminClient.from("tenant_users") as any)
       .select("user_id, role, profile:profiles(full_name, email)")
       .eq("tenant_id", tenant.id)
       .eq("role", "admin_escola")
-      .single();
+      .maybeSingle();
 
     return {
       valid: true,
@@ -64,8 +65,8 @@ export async function validateInviteTokenAction(token: string): Promise<InviteDe
       school_name: tenant.name,
       slug: tenant.slug,
       status: tenant.status,
-      admin_name: tu?.profile?.full_name || "Gestor(a) Escolar",
-      admin_email: tu?.profile?.email || tenant.email,
+      admin_name: tu?.profile?.full_name || tenant.name || "Gestor(a) Escolar",
+      admin_email: tu?.profile?.email || tenant.invite_admin_email || tenant.email,
       role: "admin_escola",
     };
   } catch (err: any) {
