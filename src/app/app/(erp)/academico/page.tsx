@@ -2,6 +2,7 @@ import React from "react";
 import { getTenantSession } from "@/lib/tenant/resolver";
 import { redirect } from "next/navigation";
 import { getCoursesAction, getSeriesAction, getSchoolClassesAction } from "@/app/actions/academico";
+import { getSchoolYearsAction } from "@/app/actions/calendario";
 import { AcademicoClient } from "@/components/academico/AcademicoClient";
 
 export default async function EstruturaAcademicaPage() {
@@ -11,11 +12,12 @@ export default async function EstruturaAcademicaPage() {
     redirect("/app/login");
   }
 
-  // Busca dados acadêmicos em paralelo
-  const [coursesRes, seriesRes, classesRes] = await Promise.all([
+  // Busca dados acadêmicos e anos letivos em paralelo
+  const [coursesRes, seriesRes, classesRes, schoolYearsRes] = await Promise.all([
     getCoursesAction(),
     getSeriesAction(),
     getSchoolClassesAction(),
+    getSchoolYearsAction(),
   ]);
 
   return (
@@ -23,6 +25,7 @@ export default async function EstruturaAcademicaPage() {
       initialCourses={coursesRes.courses || []}
       initialSeries={seriesRes.series || []}
       initialClasses={classesRes.schoolClasses || []}
+      initialSchoolYears={schoolYearsRes.schoolYears || []}
       userRole={session.role}
       schoolName={session.tenant.name}
     />

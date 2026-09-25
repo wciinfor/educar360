@@ -5,6 +5,10 @@ import {
   getAuthorizedClassesAction,
   getAcademicSettingsAction,
 } from "@/app/actions/academico";
+import {
+  getSchoolYearsAction,
+  getAcademicTermsAction,
+} from "@/app/actions/calendario";
 import { AvaliacoesClient } from "@/components/academico/AvaliacoesClient";
 import { Loader2 } from "lucide-react";
 
@@ -15,10 +19,12 @@ export default async function AvaliacoesPage() {
     redirect("/app/login");
   }
 
-  // Busca turmas autorizadas e parâmetros de avaliação da escola
-  const [classesRes, settingsRes] = await Promise.all([
+  // Busca turmas autorizadas, parâmetros de avaliação e dados do calendário escolar
+  const [classesRes, settingsRes, schoolYearsRes, termsRes] = await Promise.all([
     getAuthorizedClassesAction(),
     getAcademicSettingsAction(),
+    getSchoolYearsAction(),
+    getAcademicTermsAction(),
   ]);
 
   return (
@@ -32,9 +38,12 @@ export default async function AvaliacoesPage() {
       <AvaliacoesClient
         initialClasses={classesRes.schoolClasses || []}
         initialSettings={settingsRes.settings}
+        initialSchoolYears={schoolYearsRes.schoolYears || []}
+        initialTerms={termsRes.academicTerms || []}
         userRole={session.role}
         userName={session.profile.full_name || "Gestor Escolar"}
       />
     </Suspense>
   );
 }
+

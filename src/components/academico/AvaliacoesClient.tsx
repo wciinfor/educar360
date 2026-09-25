@@ -14,6 +14,7 @@ import {
   SaveAssessmentInput,
   SaveStudentGradesInput,
 } from "@/types/academico";
+import { SchoolYear, AcademicTerm } from "@/types/calendario";
 import {
   getAcademicAssessmentsAction,
   saveAcademicAssessmentAction,
@@ -56,6 +57,8 @@ import Link from "next/link";
 interface AvaliacoesClientProps {
   initialClasses: SchoolClass[];
   initialSettings: AcademicSettings;
+  initialSchoolYears?: SchoolYear[];
+  initialTerms?: AcademicTerm[];
   userRole: string;
   userName: string;
 }
@@ -65,6 +68,8 @@ type TabMode = "avaliacoes" | "notas" | "fechamento";
 export function AvaliacoesClient({
   initialClasses,
   initialSettings,
+  initialSchoolYears = [],
+  initialTerms = [],
   userRole,
   userName,
 }: AvaliacoesClientProps) {
@@ -128,6 +133,19 @@ export function AvaliacoesClient({
 
   const isStaff = ["admin_escola", "coordenacao", "secretaria"].includes(userRole);
   const currentClass = initialClasses.find((c) => c.id === selectedClassId);
+  const isOfficialClass = Boolean(currentClass?.school_year_id);
+  const currentClassTerms = (initialTerms || []).filter(
+    (t) => currentClass?.school_year_id && t.school_year_id === currentClass.school_year_id
+  );
+
+  // Sincroniza período selecionado quando a turma muda
+  useEffect(() => {
+    if (isOfficialClass && currentClassTerms.length > 0) {
+      if (!currentClassTerms.some((t) => t.name === selectedPeriod)) {
+        setSelectedPeriod(currentClassTerms[0].name);
+      }
+    }
+  }, [selectedClassId, isOfficialClass, currentClassTerms]);
 
   // Carrega avaliações e fechamentos ao alterar turma ou período
   useEffect(() => {
@@ -195,10 +213,15 @@ export function AvaliacoesClient({
   // Abre modal para criar nova avaliação
   const handleOpenNewAssessment = () => {
     setEditingAssessment(null);
+    const matchedTerm = isOfficialClass
+      ? currentClassTerms.find((t) => t.name === selectedPeriod) || currentClassTerms[0]
+      : null;
+
     setFormData({
       class_id: selectedClassId,
       subject_name: "",
-      academic_period: selectedPeriod,
+      academic_period: matchedTerm ? matchedTerm.name : selectedPeriod,
+      academic_term_id: matchedTerm ? matchedTerm.id : undefined,
       title: "",
       description: "",
       assessment_date: new Date().toISOString().split("T")[0],
@@ -217,6 +240,7 @@ export function AvaliacoesClient({
       class_id: a.class_id,
       subject_name: a.subject_name,
       academic_period: a.academic_period,
+      academic_term_id: a.academic_term_id,
       title: a.title,
       description: a.description || "",
       assessment_date: a.assessment_date,
@@ -397,13 +421,14 @@ export function AvaliacoesClient({
   };
 
   // Alterna fechamento de período (Lock/Unlock)
-  const handleTogglePeriodClose = async (periodName: string, isClosed: boolean) => {
+  const handleTogglePeriodClose = async (periodName: string, isClosed: boolean, termId?: string) => {
     if (!isStaff) return;
 
     try {
       const res = await togglePeriodClosingAction({
         class_id: selectedClassId,
         academic_period: periodName,
+        academic_term_id: termId,
         is_closed: isClosed,
       });
 
@@ -610,17 +635,29 @@ export function AvaliacoesClient({
               {/* Seletor de Período */}
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-slate-400" />
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                >
-                  {ACADEMIC_PERIODS.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
+                {isOfficialClass && currentClassTerms.length === 0 ? (
+                  <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                    Sem períodos cadastrados no ano letivo
+                  </span>
+                ) : (
+                  <select
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    {isOfficialClass
+                      ? currentClassTerms.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name} {t.status === "bloqueado" ? "🔒 (Bloqueado)" : ""}
+                          </option>
+                        ))
+                      : ACADEMIC_PERIODS.map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                  </select>
+                )}
               </div>
 
               {/* Status do Período */}
@@ -651,10 +688,10 @@ export function AvaliacoesClient({
 
             <button
               onClick={handleOpenNewAssessment}
-              disabled={isCurrentPeriodClosed && !isStaff}
+              disabled={(isCurrentPeriodClosed && !isStaff) || (isOfficialClass && currentClassTerms.length === 0)}
               className={clsx(
                 "inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white rounded-xl shadow-xs transition-all",
-                isCurrentPeriodClosed && !isStaff
+                (isCurrentPeriodClosed && !isStaff) || (isOfficialClass && currentClassTerms.length === 0)
                   ? "bg-slate-400 cursor-not-allowed"
                   : "bg-indigo-600 hover:bg-indigo-700 active:scale-98"
               )}
@@ -681,7 +718,8 @@ export function AvaliacoesClient({
               </p>
               <button
                 onClick={handleOpenNewAssessment}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all"
+                disabled={isOfficialClass && currentClassTerms.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all disabled:bg-slate-400 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4" />
                 <span>Cadastrar Primeira Avaliação</span>
@@ -690,7 +728,8 @@ export function AvaliacoesClient({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredAssessments.map((a) => {
-                const isLocked = (a.is_locked || isCurrentPeriodClosed) && !isStaff;
+                const isTermBlocked = a.academic_term?.status === "bloqueado";
+                const isLocked = (a.is_locked || isCurrentPeriodClosed || isTermBlocked) && !isStaff;
 
                 return (
                   <div
@@ -704,14 +743,21 @@ export function AvaliacoesClient({
                           {a.subject_name}
                         </span>
                         <div className="flex items-center gap-1.5">
-                          {a.is_locked && (
+                          {isTermBlocked ? (
+                            <span
+                              title="Período acadêmico bloqueado no Calendário"
+                              className="text-rose-500 p-1"
+                            >
+                              <Lock className="w-3.5 h-3.5 text-rose-500" />
+                            </span>
+                          ) : a.is_locked ? (
                             <span
                               title="Avaliação bloqueada para edições"
                               className="text-slate-400 p-1"
                             >
                               <Lock className="w-3.5 h-3.5 text-amber-500" />
                             </span>
-                          )}
+                          ) : null}
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                             {ASSESSMENT_TYPE_LABELS[a.assessment_type] || a.assessment_type}
                           </span>
@@ -777,11 +823,11 @@ export function AvaliacoesClient({
 
                       <button
                         onClick={() => handleOpenEditAssessment(a)}
-                        disabled={isLocked}
-                        title={isLocked ? "Edição bloqueada" : "Editar avaliação"}
+                        disabled={isLocked || isTermBlocked}
+                        title={isTermBlocked ? "Período bloqueado no calendário" : isLocked ? "Edição bloqueada" : "Editar avaliação"}
                         className={clsx(
                           "p-2 text-slate-500 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-all",
-                          isLocked && "opacity-40 cursor-not-allowed"
+                          (isLocked || isTermBlocked) && "opacity-40 cursor-not-allowed"
                         )}
                       >
                         <Edit2 className="w-4 h-4" />
@@ -789,11 +835,11 @@ export function AvaliacoesClient({
 
                       <button
                         onClick={() => handleDeleteAssessment(a)}
-                        disabled={isLocked}
-                        title={isLocked ? "Exclusão bloqueada" : "Excluir avaliação"}
+                        disabled={isLocked || isTermBlocked}
+                        title={isTermBlocked ? "Período bloqueado no calendário" : isLocked ? "Exclusão bloqueada" : "Excluir avaliação"}
                         className={clsx(
                           "p-2 text-rose-500 hover:text-rose-700 rounded-xl hover:bg-rose-50 transition-all",
-                          isLocked && "opacity-40 cursor-not-allowed"
+                          (isLocked || isTermBlocked) && "opacity-40 cursor-not-allowed"
                         )}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -838,15 +884,15 @@ export function AvaliacoesClient({
                   <span className="text-xs text-slate-500 mr-1">Preenchimento rápido:</span>
                   <button
                     onClick={() => handleBatchScore(activeAssessment.max_score)}
-                    disabled={isAssessmentLocked}
-                    className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all"
+                    disabled={isAssessmentLocked || activeAssessment.academic_term?.status === "bloqueado"}
+                    className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Nota Máxima ({activeAssessment.max_score})
                   </button>
                   <button
                     onClick={() => handleBatchScore(settings.passing_grade)}
-                    disabled={isAssessmentLocked}
-                    className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-all"
+                    disabled={isAssessmentLocked || activeAssessment.academic_term?.status === "bloqueado"}
+                    className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Média ({settings.passing_grade})
                   </button>
@@ -875,7 +921,11 @@ export function AvaliacoesClient({
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Situação de Edição:</span>
-                  {isAssessmentLocked ? (
+                  {activeAssessment.academic_term?.status === "bloqueado" ? (
+                    <span className="font-bold text-rose-600 flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" /> Período Bloqueado
+                    </span>
+                  ) : isAssessmentLocked ? (
                     <span className="font-bold text-rose-600 flex items-center gap-1">
                       <Lock className="w-3.5 h-3.5" /> Bloqueada
                     </span>
@@ -928,10 +978,10 @@ export function AvaliacoesClient({
 
                 <button
                   onClick={handleSaveGrades}
-                  disabled={isAssessmentLocked || savingGrades}
+                  disabled={isAssessmentLocked || savingGrades || activeAssessment?.academic_term?.status === "bloqueado"}
                   className={clsx(
                     "inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-all",
-                    isAssessmentLocked
+                    isAssessmentLocked || activeAssessment?.academic_term?.status === "bloqueado"
                       ? "bg-slate-400 cursor-not-allowed"
                       : "bg-indigo-600 hover:bg-indigo-700 active:scale-98"
                   )}
@@ -964,6 +1014,7 @@ export function AvaliacoesClient({
                         g.score !== undefined &&
                         activeAssessment &&
                         (g.score < 0 || g.score > activeAssessment.max_score);
+                      const isTermBlocked = activeAssessment?.academic_term?.status === "bloqueado";
 
                       return (
                         <tr
@@ -1000,7 +1051,7 @@ export function AvaliacoesClient({
                                 step="0.1"
                                 min="0"
                                 max={activeAssessment?.max_score}
-                                disabled={g.is_absent || isAssessmentLocked}
+                                disabled={g.is_absent || isAssessmentLocked || isTermBlocked}
                                 value={g.score !== null && g.score !== undefined ? g.score : ""}
                                 onChange={(e) => handleScoreChange(g.student_id, e.target.value)}
                                 placeholder="--"
@@ -1013,7 +1064,7 @@ export function AvaliacoesClient({
                                     : g.score !== null && g.score !== undefined
                                     ? "border-amber-300 bg-amber-50/40 text-amber-800"
                                     : "border-slate-200 bg-white text-slate-700 focus:ring-2 focus:ring-indigo-500",
-                                  (g.is_absent || isAssessmentLocked) &&
+                                  (g.is_absent || isAssessmentLocked || isTermBlocked) &&
                                     "bg-slate-100 text-slate-400 cursor-not-allowed"
                                 )}
                               />
@@ -1031,9 +1082,9 @@ export function AvaliacoesClient({
                               <input
                                 type="checkbox"
                                 checked={g.is_absent}
-                                disabled={isAssessmentLocked}
+                                disabled={isAssessmentLocked || isTermBlocked}
                                 onChange={() => handleToggleAbsent(g.student_id)}
-                                className="w-4 h-4 rounded-sm text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                                className="w-4 h-4 rounded-sm text-indigo-600 focus:ring-indigo-500 border-slate-300 disabled:cursor-not-allowed"
                               />
                             </label>
                           </td>
@@ -1042,11 +1093,11 @@ export function AvaliacoesClient({
                           <td className="py-3 px-4">
                             <input
                               type="text"
-                              disabled={isAssessmentLocked}
+                              disabled={isAssessmentLocked || isTermBlocked}
                               value={g.feedback_notes || ""}
                               onChange={(e) => handleNotesChange(g.student_id, e.target.value)}
                               placeholder="Opcional: motivo de recuperação, comentários..."
-                              className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
                             />
                           </td>
                         </tr>
@@ -1060,10 +1111,10 @@ export function AvaliacoesClient({
               <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
                 <button
                   onClick={handleSaveGrades}
-                  disabled={isAssessmentLocked || savingGrades}
+                  disabled={isAssessmentLocked || savingGrades || activeAssessment?.academic_term?.status === "bloqueado"}
                   className={clsx(
                     "inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white rounded-xl shadow-xs transition-all",
-                    isAssessmentLocked
+                    isAssessmentLocked || activeAssessment?.academic_term?.status === "bloqueado"
                       ? "bg-slate-400 cursor-not-allowed"
                       : "bg-indigo-600 hover:bg-indigo-700 active:scale-98"
                   )}
@@ -1103,53 +1154,108 @@ export function AvaliacoesClient({
             </div>
 
             <div className="space-y-3 pt-2">
-              {ACADEMIC_PERIODS.slice(0, 4).map((periodName) => {
-                const isClosed = closings.some(
-                  (c) => c.academic_period === periodName && c.is_closed
-                );
+              {isOfficialClass && currentClassTerms.length > 0
+                ? currentClassTerms.map((term) => {
+                    const isClosed = closings.some(
+                      (c) =>
+                        (c.academic_term_id === term.id || c.academic_period === term.name) &&
+                        c.is_closed
+                    );
+                    const isTermBlocked = term.status === "bloqueado";
 
-                return (
-                  <div
-                    key={periodName}
-                    className={clsx(
-                      "p-4 rounded-xl border flex items-center justify-between transition-all",
-                      isClosed
-                        ? "bg-rose-50/50 border-rose-200"
-                        : "bg-slate-50 border-slate-200/80"
-                    )}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-800">{periodName}</span>
-                        {isClosed ? (
-                          <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
-                            Bloqueado
-                          </span>
-                        ) : (
-                          <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            Liberado
-                          </span>
+                    return (
+                      <div
+                        key={term.id}
+                        className={clsx(
+                          "p-4 rounded-xl border flex items-center justify-between transition-all",
+                          isClosed || isTermBlocked
+                            ? "bg-rose-50/50 border-rose-200"
+                            : "bg-slate-50 border-slate-200/80"
                         )}
-                      </div>
-                      <span className="text-2xs text-slate-500 mt-0.5 block">
-                        Turma: {currentClass?.name} ({currentClass?.academic_year})
-                      </span>
-                    </div>
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-800">{term.name}</span>
+                            {isTermBlocked ? (
+                              <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-rose-200 text-rose-800">
+                                Bloqueado no Calendário
+                              </span>
+                            ) : isClosed ? (
+                              <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                                Fechado
+                              </span>
+                            ) : (
+                              <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                Liberado
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-2xs text-slate-500 mt-0.5 block">
+                            Turma: {currentClass?.name} ({currentClass?.academic_year}) • Vigência: {term.start_date.split("-").reverse().join("/")} a {term.end_date.split("-").reverse().join("/")}
+                          </span>
+                        </div>
 
-                    <button
-                      onClick={() => handleTogglePeriodClose(periodName, !isClosed)}
-                      className={clsx(
-                        "px-3 py-1.5 text-xs font-bold rounded-xl transition-all border",
-                        isClosed
-                          ? "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                          : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
-                      )}
-                    >
-                      {isClosed ? "Reabrir Período" : "Fechar Período"}
-                    </button>
-                  </div>
-                );
-              })}
+                        <button
+                          onClick={() => handleTogglePeriodClose(term.name, !isClosed, term.id)}
+                          className={clsx(
+                            "px-3 py-1.5 text-xs font-bold rounded-xl transition-all border",
+                            isClosed
+                              ? "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                              : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                          )}
+                        >
+                          {isClosed ? "Reabrir Período" : "Fechar Período"}
+                        </button>
+                      </div>
+                    );
+                  })
+                : ACADEMIC_PERIODS.slice(0, 4).map((periodName) => {
+                    const isClosed = closings.some(
+                      (c) => c.academic_period === periodName && c.is_closed
+                    );
+
+                    return (
+                      <div
+                        key={periodName}
+                        className={clsx(
+                          "p-4 rounded-xl border flex items-center justify-between transition-all",
+                          isClosed
+                            ? "bg-rose-50/50 border-rose-200"
+                            : "bg-slate-50 border-slate-200/80"
+                        )}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-slate-800">{periodName}</span>
+                            {isClosed ? (
+                              <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                                Bloqueado
+                              </span>
+                            ) : (
+                              <span className="text-2xs font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                Liberado
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-2xs text-slate-500 mt-0.5 block">
+                            Turma: {currentClass?.name} ({currentClass?.academic_year})
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleTogglePeriodClose(periodName, !isClosed)}
+                          className={clsx(
+                            "px-3 py-1.5 text-xs font-bold rounded-xl transition-all border",
+                            isClosed
+                              ? "bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                              : "bg-white text-rose-700 border-rose-300 hover:bg-rose-50"
+                          )}
+                        >
+                          {isClosed ? "Reabrir Período" : "Fechar Período"}
+                        </button>
+                      </div>
+                    );
+                  })}
             </div>
           </div>
 
@@ -1315,6 +1421,31 @@ export function AvaliacoesClient({
               </button>
             </div>
 
+            {isOfficialClass && currentClassTerms.length === 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-xs text-amber-800 font-medium">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Atenção: Nenhum período acadêmico cadastrado para este Ano Letivo no Calendário Escolar.
+                  Cadastre os períodos no Calendário antes de registrar avaliações.
+                </span>
+              </div>
+            )}
+
+            {isOfficialClass &&
+              currentClassTerms.some(
+                (t) =>
+                  (t.id === formData.academic_term_id || t.name === formData.academic_period) &&
+                  t.status === "bloqueado"
+              ) && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800 font-medium">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>
+                    O período acadêmico selecionado está bloqueado no Calendário Escolar. Criação e
+                    edições estão bloqueadas.
+                  </span>
+                </div>
+              )}
+
             <form onSubmit={handleSaveAssessment} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1349,17 +1480,48 @@ export function AvaliacoesClient({
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Período Letivo *
                   </label>
-                  <select
-                    value={formData.academic_period}
-                    onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
-                    className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  >
-                    {ACADEMIC_PERIODS.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                  </select>
+                  {isOfficialClass ? (
+                    currentClassTerms.length === 0 ? (
+                      <div className="p-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
+                        Sem períodos no Calendário
+                      </div>
+                    ) : (
+                      <select
+                        value={
+                          formData.academic_term_id ||
+                          currentClassTerms.find((t) => t.name === formData.academic_period)?.id ||
+                          ""
+                        }
+                        onChange={(e) => {
+                          const term = currentClassTerms.find((t) => t.id === e.target.value);
+                          setFormData({
+                            ...formData,
+                            academic_term_id: term?.id,
+                            academic_period: term?.name || "",
+                          });
+                        }}
+                        className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      >
+                        {currentClassTerms.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} {t.status === "bloqueado" ? "🔒 (Bloqueado)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )
+                  ) : (
+                    <select
+                      value={formData.academic_period}
+                      onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
+                      className="w-full text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      {ACADEMIC_PERIODS.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -1459,8 +1621,17 @@ export function AvaliacoesClient({
 
                 <button
                   type="submit"
-                  disabled={savingAssessment}
-                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all"
+                  disabled={
+                    savingAssessment ||
+                    (isOfficialClass && currentClassTerms.length === 0) ||
+                    (isOfficialClass &&
+                      currentClassTerms.some(
+                        (t) =>
+                          (t.id === formData.academic_term_id || t.name === formData.academic_period) &&
+                          t.status === "bloqueado"
+                      ))
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-all disabled:bg-slate-400 disabled:cursor-not-allowed"
                 >
                   {savingAssessment ? (
                     <Loader2 className="w-4 h-4 animate-spin" />

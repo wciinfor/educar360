@@ -2,6 +2,7 @@ import React, { Suspense } from "react";
 import { getTenantSession } from "@/lib/tenant/resolver";
 import { redirect } from "next/navigation";
 import { getAuthorizedClassesAction } from "@/app/actions/academico";
+import { getSchoolYearsAction, getAcademicTermsAction } from "@/app/actions/calendario";
 import { DiarioClient } from "@/components/academico/DiarioClient";
 import { Loader2 } from "lucide-react";
 
@@ -12,8 +13,12 @@ export default async function DiarioPage() {
     redirect("/app/login");
   }
 
-  // Busca as turmas autorizadas para o usuário logado
-  const classesRes = await getAuthorizedClassesAction();
+  // Busca turmas autorizadas, anos letivos e períodos acadêmicos em paralelo
+  const [classesRes, schoolYearsRes, termsRes] = await Promise.all([
+    getAuthorizedClassesAction(),
+    getSchoolYearsAction(),
+    getAcademicTermsAction(),
+  ]);
 
   return (
     <Suspense
@@ -25,6 +30,8 @@ export default async function DiarioPage() {
     >
       <DiarioClient
         initialClasses={classesRes.schoolClasses || []}
+        initialTerms={termsRes.academicTerms || []}
+        initialSchoolYears={schoolYearsRes.schoolYears || []}
         userRole={session.role}
         userName={session.profile.full_name || "Gestor Escolar"}
       />

@@ -21,6 +21,12 @@ const ACADEMICO_TABS: NavTab[] = [
     icon: Layers,
   },
   {
+    name: "Calendário Escolar",
+    href: "/app/academico/calendario",
+    description: "Anos letivos, etapas e períodos acadêmicos",
+    icon: CalendarCheck,
+  },
+  {
     name: "Diário de Classe",
     href: "/app/academico/diario",
     description: "Registro de aulas e conteúdos ministrados",

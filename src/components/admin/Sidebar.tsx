@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -28,8 +28,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { name: "Painel Geral", href: "/app/dashboard", icon: LayoutDashboard, module: "dashboard" },
   { name: "Secretaria", href: "/app/secretaria", icon: FileText, module: "secretaria" },
-  { name: "Acadêmico", href: "/app/academico", icon: GraduationCap, module: "academico" },
   { name: "Matrículas", href: "/app/matriculas", icon: UserPlus, module: "matriculas" },
+  { name: "Acadêmico", href: "/app/academico", icon: GraduationCap, module: "academico" },
   { name: "Financeiro", href: "/app/financeiro", icon: DollarSign, module: "financeiro" },
   { name: "Comunicação", href: "/app/comunicacao", icon: MessageSquare, module: "comunicacao" },
   { name: "Portais", href: "/app/portais", icon: Globe, module: "portais" },

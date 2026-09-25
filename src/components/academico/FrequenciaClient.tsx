@@ -8,6 +8,8 @@ import {
   AttendanceStatus,
   ACADEMIC_PERIODS,
   ClassAttendanceConsolidatedReport,
+  AcademicTerm,
+  SchoolYear,
 } from "@/types/academico";
 import {
   getClassLessonsAction,
@@ -43,13 +45,21 @@ import Link from "next/link";
 
 interface FrequenciaClientProps {
   initialClasses: SchoolClass[];
+  initialSchoolYears?: SchoolYear[];
+  initialTerms?: AcademicTerm[];
   userRole: string;
   userName: string;
 }
 
 type ViewMode = "lancamento" | "consolidado";
 
-export function FrequenciaClient({ initialClasses, userRole, userName }: FrequenciaClientProps) {
+export function FrequenciaClient({
+  initialClasses,
+  initialSchoolYears = [],
+  initialTerms = [],
+  userRole,
+  userName,
+}: FrequenciaClientProps) {
   const searchParams = useSearchParams();
   const initialClassParam = searchParams.get("classId");
   const initialLessonParam = searchParams.get("lessonId");
@@ -181,6 +191,9 @@ export function FrequenciaClient({ initialClasses, userRole, userName }: Frequen
   }, [viewMode, selectedClassId, selectedLessonId, selectedPeriod]);
 
   const selectedClass = initialClasses.find((c) => c.id === selectedClassId);
+  const classTerms = (initialTerms || []).filter(
+    (t) => selectedClass?.school_year_id && t.school_year_id === selectedClass.school_year_id
+  );
   const selectedLesson = lessons.find((l) => l.id === selectedLessonId);
 
   // Ações de alteração de presença
@@ -373,11 +386,17 @@ export function FrequenciaClient({ initialClasses, userRole, userName }: Frequen
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
               >
                 <option value="all">Ano Letivo Completo (Todos os Períodos)</option>
-                {ACADEMIC_PERIODS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
+                {classTerms.length > 0
+                  ? classTerms.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))
+                  : ACADEMIC_PERIODS.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
               </select>
             </div>
           )}

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useTransition } from "react";
 import { SchoolClass, ClassLesson, SaveClassLessonInput, ACADEMIC_PERIODS } from "@/types/academico";
+import { AcademicTerm, SchoolYear } from "@/types/calendario";
 import {
   saveClassLessonAction,
   deleteClassLessonAction,
@@ -34,11 +35,19 @@ import Link from "next/link";
 
 interface DiarioClientProps {
   initialClasses: SchoolClass[];
+  initialTerms?: AcademicTerm[];
+  initialSchoolYears?: SchoolYear[];
   userRole: string;
   userName: string;
 }
 
-export function DiarioClient({ initialClasses, userRole, userName }: DiarioClientProps) {
+export function DiarioClient({
+  initialClasses,
+  initialTerms = [],
+  initialSchoolYears = [],
+  userRole,
+  userName,
+}: DiarioClientProps) {
   const [selectedClassId, setSelectedClassId] = useState<string>(
     initialClasses.length > 0 ? initialClasses[0].id : ""
   );
@@ -53,6 +62,11 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
   // Modal de Criação / Edição de Aula
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<ClassLesson | null>(null);
+
+  const selectedClass = initialClasses.find((c) => c.id === selectedClassId);
+  const classTerms = initialTerms
+    .filter((t) => t.school_year_id === selectedClass?.school_year_id)
+    .sort((a, b) => a.sequence_order - b.sequence_order);
 
   const [formData, setFormData] = useState<SaveClassLessonInput>({
     class_id: selectedClassId,
@@ -74,9 +88,11 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
     setLoadingLessons(true);
     setActionError(null);
     try {
+      const isTermId = classTerms.some((t) => t.id === period);
       const res = await getClassLessonsAction({
         class_id: classId,
-        academic_period: period,
+        academic_term_id: isTermId ? period : undefined,
+        academic_period: !isTermId && period !== "all" ? period : undefined,
         start_date: start,
         end_date: end,
       });
@@ -101,8 +117,6 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
     }
   }, [selectedClassId, selectedPeriod, startDate, endDate]);
 
-  const selectedClass = initialClasses.find((c) => c.id === selectedClassId);
-
   const handleOpenModal = (lesson?: ClassLesson) => {
     setActionError(null);
     setActionSuccess(null);
@@ -111,6 +125,8 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
       setFormData({
         id: lesson.id,
         class_id: lesson.class_id,
+        school_year_id: lesson.school_year_id || selectedClass?.school_year_id,
+        academic_term_id: lesson.academic_term_id || undefined,
         lesson_date: lesson.lesson_date,
         academic_period: lesson.academic_period,
         subject_name: lesson.subject_name || "",
@@ -120,10 +136,14 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
       });
     } else {
       setEditingLesson(null);
+      const today = new Date().toISOString().split("T")[0];
+      const matchingTerm = classTerms.find((t) => today >= t.start_date && today <= t.end_date) || classTerms[0];
       setFormData({
         class_id: selectedClassId,
-        lesson_date: new Date().toISOString().split("T")[0],
-        academic_period: selectedPeriod !== "all" ? selectedPeriod : "1º Bimestre",
+        school_year_id: selectedClass?.school_year_id,
+        academic_term_id: matchingTerm?.id,
+        lesson_date: today,
+        academic_period: matchingTerm?.name || (selectedPeriod !== "all" ? selectedPeriod : "1º Bimestre"),
         subject_name: "",
         title: "",
         content_summary: "",
@@ -270,11 +290,19 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
             >
               <option value="all">Todos os Períodos</option>
-              {ACADEMIC_PERIODS.map((period) => (
-                <option key={period} value={period}>
-                  {period}
-                </option>
-              ))}
+              {classTerms.length > 0 ? (
+                classTerms.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.name} ({new Date(term.start_date + "T00:00:00").toLocaleDateString("pt-BR")} a {new Date(term.end_date + "T00:00:00").toLocaleDateString("pt-BR")})
+                  </option>
+                ))
+              ) : (
+                ACADEMIC_PERIODS.map((period) => (
+                  <option key={period} value={period}>
+                    {period}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -533,19 +561,49 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Período Letivo *
+                    Etapa / Período Letivo *
                   </label>
-                  <select
-                    value={formData.academic_period}
-                    onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
-                  >
-                    {ACADEMIC_PERIODS.map((period) => (
-                      <option key={period} value={period}>
-                        {period}
-                      </option>
-                    ))}
-                  </select>
+                  {selectedClass?.school_year_id ? (
+                    classTerms.length > 0 ? (
+                      <select
+                        required
+                        value={formData.academic_term_id || ""}
+                        onChange={(e) => {
+                          const selId = e.target.value;
+                          const term = classTerms.find((t) => t.id === selId);
+                          setFormData({
+                            ...formData,
+                            academic_term_id: selId,
+                            academic_period: term?.name || "",
+                          });
+                        }}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                      >
+                        <option value="" disabled>Selecione a etapa/período oficial</option>
+                        {classTerms.map((term) => (
+                          <option key={term.id} value={term.id}>
+                            {term.name} ({new Date(term.start_date + "T00:00:00").toLocaleDateString("pt-BR")} a {new Date(term.end_date + "T00:00:00").toLocaleDateString("pt-BR")}) {term.status === "bloqueado" ? "🔒 (Bloqueado)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                        ⚠️ Nenhum período acadêmico cadastrado para este Ano Letivo. Cadastre as etapas no Calendário Acadêmico.
+                      </div>
+                    )
+                  ) : (
+                    <select
+                      value={formData.academic_period}
+                      onChange={(e) => setFormData({ ...formData, academic_period: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      {ACADEMIC_PERIODS.map((period) => (
+                        <option key={period} value={period}>
+                          {period} (Legado)
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
@@ -603,18 +661,38 @@ export function DiarioClient({ initialClasses, userRole, userName }: DiarioClien
                 />
               </div>
 
+              {selectedClass?.school_year_id && classTerms.length === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Cadastre ao menos um Período Acadêmico no Calendário Escolar para poder registrar aulas nesta turma.</span>
+                </div>
+              )}
+
+              {classTerms.find((t) => t.id === formData.academic_term_id)?.status === "bloqueado" && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Este Período Acadêmico está <strong>bloqueado</strong>. Não é permitido criar ou editar aulas.</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors"
+                  className="px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isPending}
-                  className="px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  disabled={
+                    isPending ||
+                    (Boolean(selectedClass?.school_year_id) &&
+                      (classTerms.length === 0 ||
+                        !formData.academic_term_id ||
+                        classTerms.find((t) => t.id === formData.academic_term_id)?.status === "bloqueado"))
+                  }
+                  className="px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isPending ? (
                     <>

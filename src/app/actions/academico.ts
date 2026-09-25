@@ -36,6 +36,9 @@ import {
   TogglePeriodClosingInput,
   SaveAcademicSettingsInput,
   StudentReportCard,
+  ReportCardTerm,
+  SchoolYear,
+  AcademicTerm,
   SubjectReportItem,
   PeriodGradeDetail,
   HistoryOriginType,
@@ -677,6 +680,7 @@ export async function deleteSeriesAction(
 export async function getSchoolClassesAction(filters?: {
   seriesId?: string;
   academicYear?: string;
+  schoolYearId?: string;
   shift?: string;
 }): Promise<{
   success: boolean;
@@ -695,13 +699,17 @@ export async function getSchoolClassesAction(filters?: {
           series:series(
             *,
             course:courses(*)
-          )
+          ),
+          school_year:school_years(*)
         `)
         .eq("tenant_id", session.tenant.id)
         .order("name", { ascending: true });
 
       if (filters?.seriesId && filters.seriesId !== "all") {
         query = query.eq("series_id", filters.seriesId);
+      }
+      if (filters?.schoolYearId && filters.schoolYearId !== "all") {
+        query = query.eq("school_year_id", filters.schoolYearId);
       }
       if (filters?.academicYear && filters.academicYear !== "all") {
         query = query.eq("academic_year", filters.academicYear);
@@ -717,6 +725,7 @@ export async function getSchoolClassesAction(filters?: {
           id: c.id,
           tenant_id: c.tenant_id,
           series_id: c.series_id,
+          school_year_id: c.school_year_id || null,
           name: c.name,
           academic_year: c.academic_year,
           shift: c.shift,
@@ -725,6 +734,7 @@ export async function getSchoolClassesAction(filters?: {
           created_at: c.created_at,
           updated_at: c.updated_at,
           series: c.series,
+          school_year: c.school_year || null,
         }));
         return { success: true, schoolClasses: list };
       }
@@ -783,9 +793,6 @@ export async function saveSchoolClassAction(
     if (!input.series_id) {
       return { success: false, error: "A seleção da série/ano escolar é obrigatória." };
     }
-    if (!input.academic_year?.trim()) {
-      return { success: false, error: "O ano letivo da turma é obrigatório." };
-    }
     if (!input.capacity || Number(input.capacity) <= 0) {
       return { success: false, error: "A capacidade da turma deve ser um número positivo maior que zero." };
     }
@@ -793,9 +800,88 @@ export async function saveSchoolClassAction(
     const isEdit = "id" in input && Boolean(input.id);
     const classId = isEdit ? (input as UpdateSchoolClassInput).id : crypto.randomUUID();
     const capacity = Number(input.capacity);
-    const academicYear = input.academic_year.trim();
     const shift = input.shift;
     const isActive = input.is_active !== undefined ? input.is_active : true;
+
+    // Resolução e validação do Ano Letivo oficial
+    let resolvedSchoolYearId: string | null = input.school_year_id || null;
+    let academicYear = "";
+
+    if (!isEdit) {
+      // Regra Definitiva: Criação de nova turma EXIGE school_year_id válido pertencente ao tenant
+      if (!resolvedSchoolYearId) {
+        // Verifica se o tenant possui algum ano letivo cadastrado
+        const { count: syCount } = await (supabase.from("school_years") as any)
+          .select("id", { count: "exact", head: true })
+          .eq("tenant_id", session.tenant.id);
+
+        if (!syCount || syCount === 0) {
+          return {
+            success: false,
+            error:
+              "Não é possível criar turmas sem um Ano Letivo cadastrado. Cadastre o Ano Letivo no Calendário Acadêmico antes de criar turmas.",
+          };
+        }
+
+        return {
+          success: false,
+          error: "A seleção de um Ano Letivo cadastrado no Calendário Acadêmico é obrigatória para novas turmas.",
+        };
+      }
+
+      const { data: syRecord, error: syErr } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", resolvedSchoolYearId)
+        .maybeSingle();
+
+      if (syErr || !syRecord) {
+        return {
+          success: false,
+          error: "O Ano Letivo selecionado não foi encontrado ou não pertence a esta instituição.",
+        };
+      }
+
+      // Sincroniza automaticamente a coluna legada academic_year a partir de school_year.year
+      academicYear = syRecord.year;
+    } else {
+      // Edição de turma existente
+      if (resolvedSchoolYearId) {
+        const { data: syRecord, error: syErr } = await (supabase.from("school_years") as any)
+          .select("id, year, title, status")
+          .eq("tenant_id", session.tenant.id)
+          .eq("id", resolvedSchoolYearId)
+          .maybeSingle();
+
+        if (syErr || !syRecord) {
+          return {
+            success: false,
+            error: "O Ano Letivo selecionado não foi encontrado ou não pertence a esta instituição.",
+          };
+        }
+        academicYear = syRecord.year;
+      } else {
+        // Turmas legadas com school_year_id = NULL continuam funcionando sem quebra
+        const { data: existingClass } = await (supabase.from("school_classes") as any)
+          .select("school_year_id, academic_year")
+          .eq("tenant_id", session.tenant.id)
+          .eq("id", classId)
+          .maybeSingle();
+
+        academicYear = input.academic_year
+          ? input.academic_year.trim()
+          : existingClass?.academic_year || "";
+
+        resolvedSchoolYearId = existingClass?.school_year_id || null;
+
+        if (!academicYear) {
+          return {
+            success: false,
+            error: "O Ano Letivo da turma é obrigatório.",
+          };
+        }
+      }
+    }
 
     // Se estiver editando, valida se a nova capacidade não é inferior ao total de matrículas ativas (status = 'matriculado')
     if (isEdit) {
@@ -871,16 +957,21 @@ export async function saveSchoolClassAction(
 
       // Se a RPC ainda não existe no banco, executa fallback relacional
       if (!atomicExecuted) {
+        const updatePayload: Record<string, any> = {
+          series_id: input.series_id,
+          name,
+          academic_year: academicYear,
+          shift,
+          capacity,
+          is_active: isActive,
+          updated_at: new Date().toISOString(),
+        };
+        if (resolvedSchoolYearId) {
+          updatePayload.school_year_id = resolvedSchoolYearId;
+        }
+
         const { error } = await (supabase.from("school_classes") as any)
-          .update({
-            series_id: input.series_id,
-            name,
-            academic_year: academicYear,
-            shift,
-            capacity,
-            is_active: isActive,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq("id", classId)
           .eq("tenant_id", session.tenant.id);
 
@@ -888,7 +979,7 @@ export async function saveSchoolClassAction(
           if (error.code === "42P01" || error.message?.includes("does not exist")) {
             isTableMissing = true;
           } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("series_id")) {
-            return { success: false, error: "A série selecionada não foi encontrada no banco de dados. Recarregue a página e tente novamente." };
+            return { success: false, error: "A série ou ano letivo selecionado não foi encontrado no banco de dados. Recarregue a página e tente novamente." };
           } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_class_tenant_year_series_name")) {
             return { success: false, error: "Já existe uma turma com este nome no mesmo ano letivo e série." };
           } else {
@@ -899,26 +990,29 @@ export async function saveSchoolClassAction(
         }
       }
     } else {
-      const { error } = await (supabase.from("school_classes") as any).insert([
-        {
-          id: classId,
-          tenant_id: session.tenant.id,
-          series_id: input.series_id,
-          name,
-          academic_year: academicYear,
-          shift,
-          capacity,
-          is_active: isActive,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]);
+      const insertPayload: Record<string, any> = {
+        id: classId,
+        tenant_id: session.tenant.id,
+        series_id: input.series_id,
+        name,
+        academic_year: academicYear,
+        shift,
+        capacity,
+        is_active: isActive,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      if (resolvedSchoolYearId) {
+        insertPayload.school_year_id = resolvedSchoolYearId;
+      }
+
+      const { error } = await (supabase.from("school_classes") as any).insert([insertPayload]);
 
       if (error) {
         if (error.code === "42P01" || error.message?.includes("does not exist")) {
           isTableMissing = true;
         } else if (error.code === "23503" || error.message?.includes("foreign key") || error.message?.includes("series_id")) {
-          return { success: false, error: "A série selecionada não foi encontrada no banco de dados. Recarregue a página e tente novamente." };
+          return { success: false, error: "A série ou ano letivo selecionado não foi encontrado no banco de dados. Recarregue a página e tente novamente." };
         } else if (error.code === "23505" || error.message?.includes("duplicate") || error.message?.includes("uq_class_tenant_year_series_name")) {
           return { success: false, error: "Já existe uma turma com este nome no mesmo ano letivo e série." };
         } else {
@@ -1247,6 +1341,7 @@ export async function getAuthorizedClassesAction(filters?: {
  */
 export async function getClassLessonsAction(filters: {
   class_id: string;
+  academic_term_id?: string;
   academic_period?: string;
   start_date?: string;
   end_date?: string;
@@ -1270,12 +1365,17 @@ export async function getClassLessonsAction(filters: {
           *,
           teacher:profiles(full_name),
           school_class:school_classes(name),
+          school_year:school_years(*),
+          academic_term:academic_terms(*),
           attendances:lesson_attendances(id, status)
         `)
         .eq("tenant_id", session.tenant.id)
         .eq("class_id", filters.class_id)
         .order("lesson_date", { ascending: false });
 
+      if (filters.academic_term_id && filters.academic_term_id !== "all") {
+        query = query.eq("academic_term_id", filters.academic_term_id);
+      }
       if (filters.academic_period && filters.academic_period !== "all") {
         query = query.eq("academic_period", filters.academic_period);
       }
@@ -1298,6 +1398,8 @@ export async function getClassLessonsAction(filters: {
             id: l.id,
             tenant_id: l.tenant_id,
             class_id: l.class_id,
+            school_year_id: l.school_year_id || null,
+            academic_term_id: l.academic_term_id || null,
             teacher_id: l.teacher_id,
             lesson_date: l.lesson_date,
             academic_period: l.academic_period,
@@ -1309,6 +1411,8 @@ export async function getClassLessonsAction(filters: {
             updated_at: l.updated_at,
             teacher_name: l.teacher?.full_name || "Professor",
             class_name: l.school_class?.name || "Turma",
+            school_year: l.school_year || null,
+            academic_term: l.academic_term || null,
             attendances_count: atts.length,
             present_count: atts.filter((a: any) => a.status === "presente").length,
             absent_count: atts.filter((a: any) => a.status === "falta").length,
@@ -1333,6 +1437,9 @@ export async function getClassLessonsAction(filters: {
 
       let filtered = lessonStore.filter((l) => l.tenant_id === session.tenant.id && l.class_id === filters.class_id);
 
+      if (filters.academic_term_id && filters.academic_term_id !== "all") {
+        filtered = filtered.filter((l) => l.academic_term_id === filters.academic_term_id);
+      }
       if (filters.academic_period && filters.academic_period !== "all") {
         filtered = filtered.filter((l) => l.academic_period === filters.academic_period);
       }
@@ -1379,7 +1486,6 @@ export async function saveClassLessonAction(
     const isEdit = Boolean(payload.id);
     const lessonId = payload.id || crypto.randomUUID();
     const lessonDate = payload.lesson_date.trim();
-    const academicPeriod = payload.academic_period.trim() || "1º Bimestre";
     const title = payload.title.trim();
     const contentSummary = payload.content_summary.trim();
     const subjectName = payload.subject_name ? payload.subject_name.trim() : null;
@@ -1398,12 +1504,144 @@ export async function saveClassLessonAction(
       return { success: false, error: "O resumo do conteúdo ministrado deve conter pelo menos 5 caracteres." };
     }
 
+    // 1. Busca a turma para obter school_year_id
+    const { data: targetClass, error: tcErr } = await (supabase.from("school_classes") as any)
+      .select("id, tenant_id, school_year_id, academic_year, school_year:school_years(*)")
+      .eq("tenant_id", session.tenant.id)
+      .eq("id", payload.class_id)
+      .maybeSingle();
+
+    if (tcErr || !targetClass) {
+      return { success: false, error: "Turma não encontrada para lançamento da aula." };
+    }
+
+    // 2. Resolução do Ano Letivo oficial
+    let schoolYearId: string | null = payload.school_year_id || targetClass.school_year_id || null;
+    let schoolYear: any = targetClass.school_year || null;
+
+    if (!schoolYear && schoolYearId) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", schoolYearId)
+        .maybeSingle();
+      schoolYear = sy;
+    } else if (!schoolYear && targetClass.academic_year) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", targetClass.academic_year)
+        .maybeSingle();
+      if (sy) {
+        schoolYear = sy;
+        schoolYearId = sy.id;
+      }
+    }
+
+    // 3. Resolução e validação estrita do Período Acadêmico oficial
+    let academicTermId: string | null = payload.academic_term_id || null;
+    let academicTerm: any = null;
+
+    if (academicTermId) {
+      const { data: atRecord } = await (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", academicTermId)
+        .maybeSingle();
+
+      if (!atRecord) {
+        return {
+          success: false,
+          error: "O Período Acadêmico selecionado não foi encontrado ou não pertence a esta instituição.",
+        };
+      }
+
+      // Validação 3: academic_term_id deve pertencer ao mesmo school_year_id da turma
+      if (schoolYearId && atRecord.school_year_id !== schoolYearId) {
+        return {
+          success: false,
+          error: "O Período Acadêmico selecionado não pertence ao Ano Letivo oficial desta turma.",
+        };
+      }
+
+      academicTerm = atRecord;
+      if (!schoolYearId && academicTerm.school_year_id) {
+        schoolYearId = academicTerm.school_year_id;
+      }
+    } else if (schoolYearId) {
+      const { data: atRecords } = await (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("school_year_id", schoolYearId);
+
+      // Validação 2: Se a turma possui Ano Letivo oficial, mas não há períodos cadastrados, bloqueia
+      if (!atRecords || atRecords.length === 0) {
+        return {
+          success: false,
+          error: "Não existem períodos acadêmicos cadastrados para o Ano Letivo desta turma. Cadastre os períodos no Calendário Acadêmico antes de registrar aulas.",
+        };
+      }
+
+      const matchingByDate = atRecords.find(
+        (t: any) => lessonDate >= t.start_date && lessonDate <= t.end_date
+      );
+      if (matchingByDate) {
+        academicTerm = matchingByDate;
+        academicTermId = matchingByDate.id;
+      } else if (payload.academic_period) {
+        const matchingByName = atRecords.find(
+          (t: any) => t.name.toLowerCase() === payload.academic_period!.toLowerCase().trim()
+        );
+        if (matchingByName) {
+          academicTerm = matchingByName;
+          academicTermId = matchingByName.id;
+        }
+      }
+
+      // Validação 1: Turma com school_year_id exige obrigatoriamente academic_term_id válido
+      if (!academicTermId || !academicTerm) {
+        return {
+          success: false,
+          error: `Esta turma está vinculada a um Ano Letivo oficial. É obrigatório selecionar ou vincular a aula a um Período Acadêmico oficial (a data ${lessonDate} não coincide com a vigência de nenhum período cadastrado).`,
+        };
+      }
+    }
+
+    // 4. Validações Temporais Rigorosas com o Calendário Acadêmico
+    if (schoolYear) {
+      if (lessonDate < schoolYear.start_date || lessonDate > schoolYear.end_date) {
+        return {
+          success: false,
+          error: `A data da aula (${lessonDate}) está fora do período de vigência do Ano Letivo ${schoolYear.year} (${schoolYear.start_date} a ${schoolYear.end_date}).`,
+        };
+      }
+    }
+
+    if (academicTerm) {
+      if (lessonDate < academicTerm.start_date || lessonDate > academicTerm.end_date) {
+        return {
+          success: false,
+          error: `A data da aula (${lessonDate}) está fora da vigência de '${academicTerm.name}' (${academicTerm.start_date} a ${academicTerm.end_date}).`,
+        };
+      }
+
+      // Validação 4: Período com status bloqueado impede criação e edição para TODOS os perfis
+      if (academicTerm.status === "bloqueado") {
+        return {
+          success: false,
+          error: `O período acadêmico '${academicTerm.name}' está bloqueado para novos lançamentos e edições no diário de classe.`,
+        };
+      }
+    }
+
+    const academicPeriod = academicTerm ? academicTerm.name : (payload.academic_period?.trim() || "1º Bimestre");
+
     let savedOnPhysical = false;
 
-    // 1. Tenta salvar na tabela física public.class_lessons
+    // 5. Tenta salvar na tabela física public.class_lessons
     try {
       const now = new Date().toISOString();
-      const record = {
+      const record: Record<string, any> = {
         id: lessonId,
         tenant_id: session.tenant.id,
         class_id: payload.class_id,
@@ -1416,6 +1654,9 @@ export async function saveClassLessonAction(
         pedagogical_notes: pedagogicalNotes,
         updated_at: now,
       };
+
+      if (schoolYearId) record.school_year_id = schoolYearId;
+      if (academicTermId) record.academic_term_id = academicTermId;
 
       if (isEdit) {
         const { error } = await (supabase.from("class_lessons") as any)
@@ -1438,7 +1679,7 @@ export async function saveClassLessonAction(
       // Fallback
     }
 
-    // 2. Fallback JSONB
+    // 6. Fallback JSONB
     if (!savedOnPhysical) {
       const { data: curTenant } = await (supabase.from("tenants") as any)
         .select("settings")
@@ -1455,6 +1696,8 @@ export async function saveClassLessonAction(
           lessonStore[idx] = {
             ...lessonStore[idx],
             class_id: payload.class_id,
+            school_year_id: schoolYearId,
+            academic_term_id: academicTermId,
             lesson_date: lessonDate,
             academic_period: academicPeriod,
             subject_name: subjectName,
@@ -1469,6 +1712,8 @@ export async function saveClassLessonAction(
           id: lessonId,
           tenant_id: session.tenant.id,
           class_id: payload.class_id,
+          school_year_id: schoolYearId,
+          academic_term_id: academicTermId,
           teacher_id: session.user.id,
           lesson_date: lessonDate,
           academic_period: academicPeriod,
@@ -1478,7 +1723,6 @@ export async function saveClassLessonAction(
           pedagogical_notes: pedagogicalNotes,
           created_at: now,
           updated_at: now,
-          teacher_name: session.profile.full_name,
         });
       }
 
@@ -2147,6 +2391,8 @@ export async function saveAcademicSettingsAction(
 
 export async function getAcademicAssessmentsAction(filters: {
   classId: string;
+  academic_term_id?: string;
+  academicTermId?: string;
   academicPeriod?: string;
   subjectName?: string;
 }): Promise<{
@@ -2163,6 +2409,8 @@ export async function getAcademicAssessmentsAction(filters: {
         id,
         tenant_id,
         class_id,
+        school_year_id,
+        academic_term_id,
         subject_name,
         academic_period,
         title,
@@ -2176,13 +2424,19 @@ export async function getAcademicAssessmentsAction(filters: {
         created_at,
         updated_at,
         creator:created_by (full_name),
-        school_classes:class_id (name)
+        school_classes:class_id (name),
+        school_year:school_years(*),
+        academic_term:academic_terms(*)
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("class_id", filters.classId)
       .order("assessment_date", { ascending: false });
 
-    if (filters.academicPeriod) {
+    const termIdFilter = filters.academic_term_id || filters.academicTermId;
+    if (termIdFilter && termIdFilter !== "all") {
+      query = query.eq("academic_term_id", termIdFilter);
+    }
+    if (filters.academicPeriod && filters.academicPeriod !== "all") {
       query = query.eq("academic_period", filters.academicPeriod);
     }
     if (filters.subjectName) {
@@ -2224,6 +2478,8 @@ export async function getAcademicAssessmentsAction(filters: {
         id: a.id,
         tenant_id: a.tenant_id,
         class_id: a.class_id,
+        school_year_id: a.school_year_id || null,
+        academic_term_id: a.academic_term_id || null,
         subject_name: a.subject_name,
         academic_period: a.academic_period,
         title: a.title,
@@ -2238,6 +2494,8 @@ export async function getAcademicAssessmentsAction(filters: {
         updated_at: a.updated_at,
         class_name: a.school_classes?.name,
         creator_name: a.creator?.full_name,
+        school_year: a.school_year || null,
+        academic_term: a.academic_term || null,
         grades_count: gradeStat?.count || 0,
         average_score: avg,
       };
@@ -2264,6 +2522,8 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
         id,
         tenant_id,
         class_id,
+        school_year_id,
+        academic_term_id,
         subject_name,
         academic_period,
         title,
@@ -2277,7 +2537,9 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
         created_at,
         updated_at,
         creator:created_by (full_name),
-        school_classes:class_id (name)
+        school_classes:class_id (name),
+        school_year:school_years(*),
+        academic_term:academic_terms(*)
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("id", assessmentId)
@@ -2290,7 +2552,7 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
     // Valida permissão de acesso à turma da avaliação
     await assertClassAccess(a.class_id);
 
-    // Checa se o período está fechado
+    // Checa se o período está fechado ou bloqueado
     const { data: closing } = await (supabase.from("academic_period_closings") as any)
       .select("id, is_closed")
       .eq("tenant_id", session.tenant.id)
@@ -2298,7 +2560,8 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
       .eq("academic_period", a.academic_period)
       .maybeSingle();
 
-    const isPeriodClosed = closing?.is_closed ?? false;
+    const isTermBlocked = a.academic_term?.status === "bloqueado";
+    const isPeriodClosed = (closing?.is_closed ?? false) || isTermBlocked;
 
     return {
       success: true,
@@ -2306,6 +2569,8 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
         id: a.id,
         tenant_id: a.tenant_id,
         class_id: a.class_id,
+        school_year_id: a.school_year_id || null,
+        academic_term_id: a.academic_term_id || null,
         subject_name: a.subject_name,
         academic_period: a.academic_period,
         title: a.title,
@@ -2320,6 +2585,8 @@ export async function getAcademicAssessmentByIdAction(assessmentId: string): Pro
         updated_at: a.updated_at,
         class_name: a.school_classes?.name,
         creator_name: a.creator?.full_name,
+        school_year: a.school_year || null,
+        academic_term: a.academic_term || null,
       },
       isPeriodClosed,
     };
@@ -2337,14 +2604,16 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
     const { session, isTeacher } = await assertClassAccess(payload.class_id);
     const supabase = await createClient();
 
-    // Validações
+    const assessmentDate = payload.assessment_date.trim();
+
+    // Validações básicas
     if (!payload.title || payload.title.trim().length === 0) {
       return { success: false, error: "O título da avaliação é obrigatório." };
     }
     if (!payload.subject_name || payload.subject_name.trim().length === 0) {
       return { success: false, error: "A disciplina é obrigatória." };
     }
-    if (!payload.assessment_date) {
+    if (!assessmentDate) {
       return { success: false, error: "A data da avaliação é obrigatória." };
     }
     if (payload.max_score <= 0) {
@@ -2354,27 +2623,154 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
       return { success: false, error: "O peso da avaliação deve ser maior que zero." };
     }
 
-    // Checagem de período fechado
+    // 1. Busca a turma para obter dados do Ano Letivo oficial
+    const { data: targetClass, error: tcErr } = await (supabase.from("school_classes") as any)
+      .select("id, tenant_id, school_year_id, academic_year, school_year:school_years(*)")
+      .eq("tenant_id", session.tenant.id)
+      .eq("id", payload.class_id)
+      .maybeSingle();
+
+    if (tcErr || !targetClass) {
+      return { success: false, error: "Turma não encontrada para cadastro da avaliação." };
+    }
+
+    // 2. Resolução do Ano Letivo oficial
+    let schoolYearId: string | null = payload.school_year_id || targetClass.school_year_id || null;
+    let schoolYear: any = targetClass.school_year || null;
+
+    if (!schoolYear && schoolYearId) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", schoolYearId)
+        .maybeSingle();
+      schoolYear = sy;
+    } else if (!schoolYear && targetClass.academic_year) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", targetClass.academic_year)
+        .maybeSingle();
+      if (sy) {
+        schoolYear = sy;
+        schoolYearId = sy.id;
+      }
+    }
+
+    // 3. Resolução e validação estrita do Período Acadêmico oficial
+    let academicTermId: string | null = payload.academic_term_id || null;
+    let academicTerm: any = null;
+
+    if (academicTermId) {
+      const { data: atRecord } = await (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", academicTermId)
+        .maybeSingle();
+
+      if (!atRecord) {
+        return {
+          success: false,
+          error: "O Período Acadêmico selecionado não foi encontrado ou não pertence a esta instituição.",
+        };
+      }
+
+      // Validação: academic_term_id deve pertencer ao mesmo school_year_id da turma
+      if (schoolYearId && atRecord.school_year_id !== schoolYearId) {
+        return {
+          success: false,
+          error: "O Período Acadêmico selecionado não pertence ao Ano Letivo oficial desta turma.",
+        };
+      }
+
+      academicTerm = atRecord;
+      if (!schoolYearId && academicTerm.school_year_id) {
+        schoolYearId = academicTerm.school_year_id;
+      }
+    } else if (schoolYearId) {
+      const { data: atRecords } = await (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("school_year_id", schoolYearId);
+
+      if (!atRecords || atRecords.length === 0) {
+        return {
+          success: false,
+          error: "Não existem períodos acadêmicos cadastrados para o Ano Letivo desta turma. Cadastre os períodos no Calendário Acadêmico antes de criar avaliações.",
+        };
+      }
+
+      const matchingByDate = atRecords.find(
+        (t: any) => assessmentDate >= t.start_date && assessmentDate <= t.end_date
+      );
+      if (matchingByDate) {
+        academicTerm = matchingByDate;
+        academicTermId = matchingByDate.id;
+      } else if (payload.academic_period) {
+        const matchingByName = atRecords.find(
+          (t: any) => t.name.toLowerCase() === payload.academic_period!.toLowerCase().trim()
+        );
+        if (matchingByName) {
+          academicTerm = matchingByName;
+          academicTermId = matchingByName.id;
+        }
+      }
+
+      if (!academicTermId || !academicTerm) {
+        return {
+          success: false,
+          error: `Esta turma está vinculada a um Ano Letivo oficial. É obrigatório selecionar um Período Acadêmico oficial válido (a data ${assessmentDate} não coincide com a vigência de nenhum período cadastrado).`,
+        };
+      }
+    }
+
+    // 4. Validações Temporais Rigorosas com o Calendário Acadêmico
+    if (schoolYear) {
+      if (assessmentDate < schoolYear.start_date || assessmentDate > schoolYear.end_date) {
+        return {
+          success: false,
+          error: `A data da avaliação (${assessmentDate}) está fora do período de vigência do Ano Letivo ${schoolYear.year} (${schoolYear.start_date} a ${schoolYear.end_date}).`,
+        };
+      }
+    }
+
+    if (academicTerm) {
+      if (assessmentDate < academicTerm.start_date || assessmentDate > academicTerm.end_date) {
+        return {
+          success: false,
+          error: `A data da avaliação (${assessmentDate}) está fora da vigência de '${academicTerm.name}' (${academicTerm.start_date} a ${academicTerm.end_date}).`,
+        };
+      }
+
+      // Validação: Período com status bloqueado impede criação e edição para TODOS os perfis
+      if (academicTerm.status === "bloqueado") {
+        return {
+          success: false,
+          error: `O período acadêmico '${academicTerm.name}' está bloqueado para criação e alteração de avaliações.`,
+        };
+      }
+    }
+
+    const academicPeriod = academicTerm ? academicTerm.name : (payload.academic_period?.trim() || "1º Bimestre");
+
+    // Checagem de período fechado manual
     const { data: closing } = await (supabase.from("academic_period_closings") as any)
       .select("id, is_closed")
       .eq("tenant_id", session.tenant.id)
       .eq("class_id", payload.class_id)
-      .eq("academic_period", payload.academic_period)
+      .eq("academic_period", academicPeriod)
       .maybeSingle();
 
-    if (closing?.is_closed) {
-      if (isTeacher) {
-        return {
-          success: false,
-          error: `O período ${payload.academic_period} está fechado para lançamentos e alterações.`,
-        };
-      }
+    if (closing?.is_closed && isTeacher) {
+      return {
+        success: false,
+        error: `O período ${academicPeriod} está fechado para lançamentos e alterações.`,
+      };
     }
 
     const isEdit = !!payload.id;
 
     if (isEdit) {
-      // Verifica se a avaliação existe e se o usuário tem permissão para editá-la
       const { data: existing, error: findErr } = await (supabase.from("academic_assessments") as any)
         .select("id, created_by, is_locked")
         .eq("tenant_id", session.tenant.id)
@@ -2389,18 +2785,23 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
         return { success: false, error: "Esta avaliação está bloqueada para alterações." };
       }
 
+      const updateData: Record<string, any> = {
+        subject_name: payload.subject_name.trim(),
+        academic_period: academicPeriod,
+        title: payload.title.trim(),
+        description: payload.description?.trim() || null,
+        assessment_date: assessmentDate,
+        assessment_type: payload.assessment_type,
+        max_score: payload.max_score,
+        weight: payload.weight,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (schoolYearId) updateData.school_year_id = schoolYearId;
+      if (academicTermId) updateData.academic_term_id = academicTermId;
+
       const { data: updated, error: updateErr } = await (supabase.from("academic_assessments") as any)
-        .update({
-          subject_name: payload.subject_name.trim(),
-          academic_period: payload.academic_period,
-          title: payload.title.trim(),
-          description: payload.description?.trim() || null,
-          assessment_date: payload.assessment_date,
-          assessment_type: payload.assessment_type,
-          max_score: payload.max_score,
-          weight: payload.weight,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq("tenant_id", session.tenant.id)
         .eq("id", payload.id)
         .select()
@@ -2434,6 +2835,8 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
           id: updated.id,
           tenant_id: updated.tenant_id,
           class_id: updated.class_id,
+          school_year_id: updated.school_year_id || null,
+          academic_term_id: updated.academic_term_id || null,
           subject_name: updated.subject_name,
           academic_period: updated.academic_period,
           title: updated.title,
@@ -2446,27 +2849,32 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
           created_by: updated.created_by,
           created_at: updated.created_at,
           updated_at: updated.updated_at,
+          school_year: schoolYear,
+          academic_term: academicTerm,
         },
       };
     } else {
       // Inserção
+      const insertData: Record<string, any> = {
+        tenant_id: session.tenant.id,
+        class_id: payload.class_id,
+        subject_name: payload.subject_name.trim(),
+        academic_period: academicPeriod,
+        title: payload.title.trim(),
+        description: payload.description?.trim() || null,
+        assessment_date: assessmentDate,
+        assessment_type: payload.assessment_type,
+        max_score: payload.max_score,
+        weight: payload.weight,
+        is_locked: false,
+        created_by: session.user.id,
+      };
+
+      if (schoolYearId) insertData.school_year_id = schoolYearId;
+      if (academicTermId) insertData.academic_term_id = academicTermId;
+
       const { data: inserted, error: insertErr } = await (supabase.from("academic_assessments") as any)
-        .insert([
-          {
-            tenant_id: session.tenant.id,
-            class_id: payload.class_id,
-            subject_name: payload.subject_name.trim(),
-            academic_period: payload.academic_period,
-            title: payload.title.trim(),
-            description: payload.description?.trim() || null,
-            assessment_date: payload.assessment_date,
-            assessment_type: payload.assessment_type,
-            max_score: payload.max_score,
-            weight: payload.weight,
-            is_locked: false,
-            created_by: session.user.id,
-          },
-        ])
+        .insert([insertData])
         .select()
         .single();
 
@@ -2498,6 +2906,8 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
           id: inserted.id,
           tenant_id: inserted.tenant_id,
           class_id: inserted.class_id,
+          school_year_id: inserted.school_year_id || null,
+          academic_term_id: inserted.academic_term_id || null,
           subject_name: inserted.subject_name,
           academic_period: inserted.academic_period,
           title: inserted.title,
@@ -2510,6 +2920,8 @@ export async function saveAcademicAssessmentAction(payload: SaveAssessmentInput)
           created_by: inserted.created_by,
           created_at: inserted.created_at,
           updated_at: inserted.updated_at,
+          school_year: schoolYear,
+          academic_term: academicTerm,
         },
       };
     }
@@ -2737,7 +3149,21 @@ export async function saveAssessmentGradesAction(payload: SaveStudentGradesInput
 
     // 1. Busca a avaliação para validar existência e valor máximo
     const { data: assessment, error: aErr } = await (supabase.from("academic_assessments") as any)
-      .select("id, class_id, academic_period, max_score, is_locked")
+      .select(`
+        id,
+        class_id,
+        academic_period,
+        academic_term_id,
+        max_score,
+        is_locked,
+        academic_term:academic_terms (
+          id,
+          name,
+          status,
+          start_date,
+          end_date
+        )
+      `)
       .eq("tenant_id", session.tenant.id)
       .eq("id", payload.assessment_id)
       .single();
@@ -2747,6 +3173,14 @@ export async function saveAssessmentGradesAction(payload: SaveStudentGradesInput
     }
 
     const { isTeacher } = await assertClassAccess(assessment.class_id);
+
+    // REGRA OFICIAL FASE 3: Se o período acadêmico oficial estiver BLOQUEADO, bloqueia lançamento/alteração de notas para TODOS os perfis
+    if (assessment.academic_term?.status === "bloqueado") {
+      return {
+        success: false,
+        error: `O período acadêmico '${assessment.academic_term?.name || assessment.academic_period}' está bloqueado no Calendário Escolar para lançamento e alteração de notas.`,
+      };
+    }
 
     // 2. Checagem de travas de período ou de avaliação
     const { data: closing } = await (supabase.from("academic_period_closings") as any)
@@ -2857,6 +3291,7 @@ export async function togglePeriodClosingAction(payload: TogglePeriodClosingInpu
       tenant_id: session.tenant.id,
       class_id: payload.class_id,
       academic_period: payload.academic_period,
+      academic_term_id: payload.academic_term_id || null,
       subject_name: payload.subject_name?.trim() || null,
       is_closed: payload.is_closed,
       closed_at: now,
@@ -2864,10 +3299,45 @@ export async function togglePeriodClosingAction(payload: TogglePeriodClosingInpu
       closure_notes: payload.closure_notes?.trim() || null,
     };
 
-    const { data, error } = await (supabase.from("academic_period_closings") as any)
-      .upsert(row, { onConflict: "tenant_id,class_id,academic_period,subject_name" })
-      .select()
-      .single();
+    let query = (supabase.from("academic_period_closings") as any)
+      .select("id")
+      .eq("tenant_id", session.tenant.id)
+      .eq("class_id", payload.class_id)
+      .eq("academic_period", payload.academic_period);
+
+    if (payload.subject_name?.trim()) {
+      query = query.eq("subject_name", payload.subject_name.trim());
+    } else {
+      query = query.is("subject_name", null);
+    }
+
+    const { data: existing } = await query.maybeSingle();
+
+    let data: any;
+    let error: any;
+
+    if (existing) {
+      const res = await (supabase.from("academic_period_closings") as any)
+        .update({
+          is_closed: payload.is_closed,
+          closed_at: now,
+          closed_by: session.user.id,
+          closure_notes: payload.closure_notes?.trim() || null,
+          academic_term_id: payload.academic_term_id || null,
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+      data = res.data;
+      error = res.error;
+    } else {
+      const res = await (supabase.from("academic_period_closings") as any)
+        .insert([row])
+        .select()
+        .single();
+      data = res.data;
+      error = res.error;
+    }
 
     if (error) {
       return { success: false, error: `Falha ao alterar status de fechamento do período: ${error.message}` };
@@ -2887,6 +3357,7 @@ export async function togglePeriodClosingAction(payload: TogglePeriodClosingInpu
         metadata: {
           class_id: payload.class_id,
           academic_period: payload.academic_period,
+          academic_term_id: payload.academic_term_id,
           is_closed: payload.is_closed,
           closed_at: now,
         },
@@ -2903,6 +3374,7 @@ export async function togglePeriodClosingAction(payload: TogglePeriodClosingInpu
         tenant_id: data.tenant_id,
         class_id: data.class_id,
         academic_period: data.academic_period,
+        academic_term_id: data.academic_term_id || null,
         subject_name: data.subject_name,
         is_closed: data.is_closed,
         closed_at: data.closed_at,
@@ -2930,6 +3402,7 @@ export async function getPeriodClosingsAction(classId: string): Promise<{
         tenant_id,
         class_id,
         academic_period,
+        academic_term_id,
         subject_name,
         is_closed,
         closed_at,
@@ -2949,6 +3422,7 @@ export async function getPeriodClosingsAction(classId: string): Promise<{
       tenant_id: c.tenant_id,
       class_id: c.class_id,
       academic_period: c.academic_period,
+      academic_term_id: c.academic_term_id || null,
       subject_name: c.subject_name,
       is_closed: c.is_closed,
       closed_at: c.closed_at,
@@ -3071,6 +3545,61 @@ export async function getStudentReportCardAction(
       return { success: false, error: "Turma não encontrada." };
     }
 
+    // 1.1 Resolução do Ano Letivo oficial (por school_year_id ou academic_year)
+    let resolvedSchoolYearId: string | null = (schoolClass as any).school_year_id || null;
+    let resolvedSchoolYear: any = null;
+
+    if (resolvedSchoolYearId) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", resolvedSchoolYearId)
+        .maybeSingle();
+      resolvedSchoolYear = syData;
+    } else if (schoolClass.academic_year) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", schoolClass.academic_year)
+        .maybeSingle();
+      if (syData) {
+        resolvedSchoolYear = syData;
+        resolvedSchoolYearId = syData.id;
+      }
+    }
+
+    // 1.2 Busca períodos acadêmicos oficiais se o Ano Letivo oficial for encontrado
+    let termsList: ReportCardTerm[] = [];
+    if (resolvedSchoolYearId) {
+      const { data: termsData } = await (supabase.from("academic_terms") as any)
+        .select("id, tenant_id, school_year_id, name, term_type, sequence_order, start_date, end_date, status")
+        .eq("tenant_id", session.tenant.id)
+        .eq("school_year_id", resolvedSchoolYearId)
+        .order("sequence_order", { ascending: true });
+
+      if (termsData && termsData.length > 0) {
+        termsList = termsData.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          term_type: t.term_type,
+          sequence_order: t.sequence_order,
+          start_date: t.start_date,
+          end_date: t.end_date,
+          status: t.status,
+        }));
+      }
+    }
+
+    // Se for turma legada ou se o Ano Letivo oficial não tiver períodos cadastrados, usa o padrão de 4 bimestres
+    if (termsList.length === 0) {
+      const fallbackNames = ["1º Bimestre", "2º Bimestre", "3º Bimestre", "4º Bimestre"];
+      termsList = fallbackNames.map((name, idx) => ({
+        name,
+        sequence_order: idx + 1,
+        status: "aberto",
+      }));
+    }
+
     // 2. Busca dados do aluno e matrícula
     const { data: enrollment, error: eErr } = await (supabase.from("enrollments") as any)
       .select(`
@@ -3095,10 +3624,19 @@ export async function getStudentReportCardAction(
 
     // 4. Busca todos os fechamentos de período para a turma
     const closingsRes = await getPeriodClosingsAction(classId);
-    const closingsMap = new Map<string, boolean>();
+    const closingsByTermId = new Map<string, boolean>();
+    const closingsByPeriodName = new Map<string, boolean>();
     (closingsRes.closings || []).forEach((c) => {
-      const key = `${c.academic_period}-${c.subject_name || ""}`;
-      if (c.is_closed) closingsMap.set(key, true);
+      if (c.is_closed) {
+        if (c.academic_term_id) {
+          closingsByTermId.set(`${c.academic_term_id}-${c.subject_name || ""}`, true);
+          closingsByTermId.set(`${c.academic_term_id}-`, true);
+        }
+        if (c.academic_period) {
+          closingsByPeriodName.set(`${c.academic_period}-${c.subject_name || ""}`, true);
+          closingsByPeriodName.set(`${c.academic_period}-`, true);
+        }
+      }
     });
 
     // 5. Busca todas as avaliações da turma
@@ -3126,7 +3664,7 @@ export async function getStudentReportCardAction(
 
     // 7. Busca dados de frequência do aluno nesta turma
     const { data: lessonsData } = await (supabase.from("class_lessons") as any)
-      .select("id, subject_name")
+      .select("id, subject_name, lesson_date")
       .eq("tenant_id", session.tenant.id)
       .eq("class_id", classId);
 
@@ -3162,7 +3700,7 @@ export async function getStudentReportCardAction(
       });
     }
 
-    // 8. Agrupa avaliações por Disciplina e Período
+    // 8. Agrupa avaliações por Disciplina e Período (associando ao Term correspondente)
     const subjectsMap = new Map<string, Map<string, any[]>>();
 
     (assessmentsData || []).forEach((a: any) => {
@@ -3171,13 +3709,26 @@ export async function getStudentReportCardAction(
         subjectsMap.set(subj, new Map<string, any[]>());
       }
       const periodMap = subjectsMap.get(subj)!;
-      if (!periodMap.has(a.academic_period)) {
-        periodMap.set(a.academic_period, []);
+
+      // Encontra o termo correspondente em termsList
+      let matchedTerm = termsList.find((t) => t.id && a.academic_term_id && t.id === a.academic_term_id);
+      if (!matchedTerm && a.academic_period) {
+        matchedTerm = termsList.find((t) => t.name.toLowerCase() === a.academic_period.toLowerCase());
+      }
+      if (!matchedTerm && a.assessment_date) {
+        matchedTerm = termsList.find(
+          (t) => t.start_date && t.end_date && a.assessment_date >= t.start_date && a.assessment_date <= t.end_date
+        );
+      }
+      const termKey = matchedTerm ? matchedTerm.name : a.academic_period || termsList[0]?.name || "1º Bimestre";
+
+      if (!periodMap.has(termKey)) {
+        periodMap.set(termKey, []);
       }
 
       const userGrade = gradesMap.get(a.id);
 
-      periodMap.get(a.academic_period)!.push({
+      periodMap.get(termKey)!.push({
         id: a.id,
         title: a.title,
         type: a.assessment_type,
@@ -3195,8 +3746,7 @@ export async function getStudentReportCardAction(
       }
     });
 
-    // 9. Constrói os relatórios de cada disciplina
-    const periodsList = ["1º Bimestre", "2º Bimestre", "3º Bimestre", "4º Bimestre"];
+    // 9. Constrói os relatórios de cada disciplina baseado nos termos oficiais
     const subjectReports: SubjectReportItem[] = [];
 
     let totalSumAnnualGrades = 0;
@@ -3208,17 +3758,27 @@ export async function getStudentReportCardAction(
       const periodsObj: Record<string, PeriodGradeDetail> = {};
       const validPeriodGrades: number[] = [];
 
-      periodsList.forEach((pName) => {
+      termsList.forEach((term) => {
+        const pName = term.name;
         const assessmentsInPeriod = periodMap.get(pName) || [];
-        const isClosed =
-          closingsMap.get(`${pName}-${subjectName}`) ||
-          closingsMap.get(`${pName}-`) ||
+
+        // Verifica se o período está fechado por closing ou bloqueado pelo Calendário
+        const isClosedByClosing =
+          (term.id ? closingsByTermId.get(`${term.id}-${subjectName}`) || closingsByTermId.get(`${term.id}-`) : false) ||
+          closingsByPeriodName.get(`${pName}-${subjectName}`) ||
+          closingsByPeriodName.get(`${pName}-`) ||
           false;
+
+        const isTermLockedOrClosed = term.status === "bloqueado" || term.status === "fechado";
+        const isClosed = isClosedByClosing || isTermLockedOrClosed;
 
         const calc = calculatePeriodGrade(assessmentsInPeriod, settings);
 
         periodsObj[pName] = {
           period: pName,
+          academic_term_id: term.id || null,
+          term_status: term.status,
+          sequence_order: term.sequence_order,
           assessments: assessmentsInPeriod,
           calculated_grade: calc.calculatedGrade,
           recovery_grade: calc.recoveryGrade,
@@ -3307,8 +3867,15 @@ export async function getStudentReportCardAction(
       student_cpf: enrollment.students?.cpf || null,
       enrollment_id: enrollment.id,
       enrollment_number: enrollment.enrollment_code || enrollment.enrollment_number || null,
-      school_class: schoolClass,
+      school_class: {
+        ...schoolClass,
+        school_year_id: resolvedSchoolYearId,
+        school_year: resolvedSchoolYear,
+      },
       academic_year: academicYear || schoolClass.academic_year,
+      school_year_id: resolvedSchoolYearId,
+      school_year: resolvedSchoolYear,
+      terms: termsList,
       settings,
       subjects: subjectReports,
       overall_average: overallAverage,
@@ -3355,6 +3922,29 @@ export async function getClassReportCardsAction(
 
     if (cErr || !schoolClass) {
       return { success: false, error: "Turma não encontrada." };
+    }
+
+    // 1.1 Resolução do Ano Letivo oficial
+    let resolvedSchoolYearId: string | null = (schoolClass as any).school_year_id || null;
+    let resolvedSchoolYear: any = null;
+
+    if (resolvedSchoolYearId) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", resolvedSchoolYearId)
+        .maybeSingle();
+      resolvedSchoolYear = syData;
+    } else if (schoolClass.academic_year) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", schoolClass.academic_year)
+        .maybeSingle();
+      if (syData) {
+        resolvedSchoolYear = syData;
+        resolvedSchoolYearId = syData.id;
+      }
     }
 
     // 2. Busca os alunos matriculados
@@ -3671,33 +4261,53 @@ export async function getStudentAcademicHistoryDocumentAction(studentId: string)
       .eq("student_id", studentId)
       .order("academic_year", { ascending: true });
 
-    const consolidatedRecords: StudentAcademicHistoryRecord[] = (historyRecords || []).map((hr: any) => ({
-      id: hr.id,
-      tenant_id: hr.tenant_id,
-      student_id: hr.student_id,
-      enrollment_id: hr.enrollment_id,
-      academic_year: hr.academic_year,
-      grade_level: hr.grade_level,
-      course_name: hr.course_name,
-      school_name: hr.school_name,
-      school_city: hr.school_city,
-      school_state: hr.school_state,
-      origin_type: hr.origin_type,
-      shift: hr.shift,
-      total_days: hr.total_days,
-      total_workload_hours: hr.total_workload_hours ? Number(hr.total_workload_hours) : null,
-      student_attendance_hours: hr.student_attendance_hours ? Number(hr.student_attendance_hours) : null,
-      attendance_percentage: hr.attendance_percentage ? Number(hr.attendance_percentage) : null,
-      final_result: hr.final_result,
-      is_locked: hr.is_locked,
-      consolidated_at: hr.consolidated_at,
-      consolidated_by: hr.consolidated_by,
-      observations: hr.observations,
-      curriculum_snapshot: Array.isArray(hr.curriculum_snapshot) ? hr.curriculum_snapshot : [],
-      created_at: hr.created_at,
-      updated_at: hr.updated_at,
-      consolidator_name: hr.consolidator?.full_name,
-    }));
+    // Busca anos letivos do tenant para enriquecer school_year de forma retrocompatível
+    const { data: tenantSchoolYears } = await (supabase.from("school_years") as any)
+      .select("id, year, title, status, start_date, end_date")
+      .eq("tenant_id", session.tenant.id);
+
+    const schoolYearMap = new Map<string, any>();
+    const schoolYearByYearMap = new Map<string, any>();
+    (tenantSchoolYears || []).forEach((sy: any) => {
+      schoolYearMap.set(sy.id, sy);
+      schoolYearByYearMap.set(sy.year, sy);
+    });
+
+    const consolidatedRecords: StudentAcademicHistoryRecord[] = (historyRecords || []).map((hr: any) => {
+      const sy = hr.school_year_id
+        ? schoolYearMap.get(hr.school_year_id)
+        : schoolYearByYearMap.get(hr.academic_year);
+
+      return {
+        id: hr.id,
+        tenant_id: hr.tenant_id,
+        student_id: hr.student_id,
+        enrollment_id: hr.enrollment_id,
+        school_year_id: hr.school_year_id || sy?.id || null,
+        academic_year: hr.academic_year,
+        grade_level: hr.grade_level,
+        course_name: hr.course_name,
+        school_name: hr.school_name,
+        school_city: hr.school_city,
+        school_state: hr.school_state,
+        origin_type: hr.origin_type,
+        shift: hr.shift,
+        total_days: hr.total_days,
+        total_workload_hours: hr.total_workload_hours ? Number(hr.total_workload_hours) : null,
+        student_attendance_hours: hr.student_attendance_hours ? Number(hr.student_attendance_hours) : null,
+        attendance_percentage: hr.attendance_percentage ? Number(hr.attendance_percentage) : null,
+        final_result: hr.final_result,
+        is_locked: hr.is_locked,
+        consolidated_at: hr.consolidated_at,
+        consolidated_by: hr.consolidated_by,
+        observations: hr.observations,
+        curriculum_snapshot: Array.isArray(hr.curriculum_snapshot) ? hr.curriculum_snapshot : [],
+        created_at: hr.created_at,
+        updated_at: hr.updated_at,
+        consolidator_name: hr.consolidator?.full_name,
+        school_year: sy || null,
+      };
+    });
 
     // 5. Ano Letivo Corrente (Em Curso)
     // Se o aluno possui matrícula ativa no tenant, projeta o ano em andamento
@@ -3831,7 +4441,7 @@ export async function consolidateCurrentYearHistoryAction(
         shift,
         status,
         class_id,
-        school_classes:class_id (name, series:series_id (name, course:course_id (name)))
+        school_classes:class_id (id, name, academic_year, series:series_id (name, course:course_id (name)))
       `)
       .eq("tenant_id", session.tenant.id)
       .eq("id", payload.enrollment_id)
@@ -3866,7 +4476,59 @@ export async function consolidateCurrentYearHistoryAction(
       enrollment.grade_level || enrollment.school_classes?.series?.name || "Série Regular";
     const academicYear = enrollment.academic_year;
 
-    // 2. Trava de Imutabilidade: Verifica se o histórico deste ano/série já foi consolidado
+    // 2. Resolução do Ano Letivo oficial e Validação de Encerramento/Bloqueio no Calendário
+    let resolvedSchoolYearId: string | null =
+      payload.school_year_id || enrollment.school_classes?.school_year_id || null;
+    let resolvedSchoolYear: any = null;
+
+    if (resolvedSchoolYearId) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", resolvedSchoolYearId)
+        .maybeSingle();
+      resolvedSchoolYear = syData;
+    } else if (academicYear) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", academicYear)
+        .maybeSingle();
+      if (syData) {
+        resolvedSchoolYear = syData;
+        resolvedSchoolYearId = syData.id;
+      }
+    }
+
+    // Regra do Calendário: Não permitir consolidação oficial antes do encerramento/bloqueio do Ano Letivo
+    if (resolvedSchoolYear) {
+      if (resolvedSchoolYear.status === "planejamento") {
+        return {
+          success: false,
+          error: `Não é possível consolidar histórico de um Ano Letivo em planejamento (${resolvedSchoolYear.title || resolvedSchoolYear.year}).`,
+        };
+      }
+
+      if (resolvedSchoolYear.status === "ativo") {
+        // Verifica se todos os períodos acadêmicos cadastrados estão fechados ou bloqueados
+        const { data: terms } = await (supabase.from("academic_terms") as any)
+          .select("id, name, status")
+          .eq("tenant_id", session.tenant.id)
+          .eq("school_year_id", resolvedSchoolYear.id);
+
+        if (terms && terms.length > 0) {
+          const hasOpenTerms = terms.some((t: any) => t.status === "aberto" || t.status === "planejado");
+          if (hasOpenTerms) {
+            return {
+              success: false,
+              error: `Não é possível consolidar o Histórico Escolar enquanto o Ano Letivo estiver em andamento. O Ano Letivo oficial deve estar encerrado ou todos os períodos acadêmicos devem estar fechados/bloqueados no Calendário.`,
+            };
+          }
+        }
+      }
+    }
+
+    // 3. Trava de Imutabilidade: Verifica se o histórico deste ano/série já foi consolidado
     const { data: existingRecord } = await (supabase.from("student_academic_history_records") as any)
       .select("id, is_locked, academic_year, grade_level")
       .eq("tenant_id", session.tenant.id)
@@ -3882,7 +4544,7 @@ export async function consolidateCurrentYearHistoryAction(
       };
     }
 
-    // 3. Calcula as notas e frequência oficiais do boletim
+    // 4. Calcula as notas e frequência oficiais do boletim
     const reportRes = await getStudentReportCardAction(enrollment.class_id, payload.student_id);
     if (!reportRes.success || !reportRes.reportCard) {
       return { success: false, error: "Não foi possível apurar o boletim do aluno para consolidação." };
@@ -3900,7 +4562,7 @@ export async function consolidateCurrentYearHistoryAction(
       situation: s.situation as HistoryFinalResult,
     }));
 
-    // 4. Dados da Instituição
+    // 5. Dados da Instituição
     const { data: tenant } = await (supabase.from("tenants") as any)
       .select("name, settings")
       .eq("id", session.tenant.id)
@@ -3908,7 +4570,7 @@ export async function consolidateCurrentYearHistoryAction(
 
     const instSettings = tenant?.settings?.general_info || {};
 
-    const rowToInsert = {
+    const rowToInsert: any = {
       tenant_id: session.tenant.id,
       student_id: payload.student_id,
       enrollment_id: payload.enrollment_id,
@@ -3934,8 +4596,13 @@ export async function consolidateCurrentYearHistoryAction(
       curriculum_snapshot: curriculumSnapshot,
     };
 
-    // 5. Inserção Atômica sem upsert (impede sobrescrita concorrente ou acidental)
-    const { data: inserted, error: insertErr } = await (
+    if (resolvedSchoolYearId) {
+      rowToInsert.school_year_id = resolvedSchoolYearId;
+    }
+
+    // 6. Inserção Atômica sem upsert (impede sobrescrita concorrente ou acidental) com fallback resiliente
+    let inserted: any = null;
+    const { data: insData, error: insertErr } = await (
       supabase.from("student_academic_history_records") as any
     )
       .insert([rowToInsert])
@@ -3949,10 +4616,26 @@ export async function consolidateCurrentYearHistoryAction(
           error: `Conflito de consolidação: O ano letivo ${academicYear} (${gradeLevel}) já foi consolidado por outro processo concorrente.`,
         };
       }
-      return { success: false, error: `Falha ao gravar histórico consolidado: ${insertErr.message}` };
+      if (insertErr.message?.includes("school_year_id")) {
+        delete rowToInsert.school_year_id;
+        const { data: retryIns, error: retryErr } = await (
+          supabase.from("student_academic_history_records") as any
+        )
+          .insert([rowToInsert])
+          .select()
+          .single();
+        if (retryErr) {
+          return { success: false, error: `Falha ao gravar histórico consolidado: ${retryErr.message}` };
+        }
+        inserted = retryIns;
+      } else {
+        return { success: false, error: `Falha ao gravar histórico consolidado: ${insertErr.message}` };
+      }
+    } else {
+      inserted = insData;
     }
 
-    // 6. Auditoria
+    // 7. Auditoria
     await (supabase.from("audit_logs") as any).insert([
       {
         tenant_id: session.tenant.id,
@@ -3965,6 +4648,7 @@ export async function consolidateCurrentYearHistoryAction(
         resource_id: inserted.id,
         metadata: {
           student_id: payload.student_id,
+          school_year_id: resolvedSchoolYearId,
           academic_year: academicYear,
           grade_level: gradeLevel,
           final_result: payload.final_result,
@@ -3979,6 +4663,8 @@ export async function consolidateCurrentYearHistoryAction(
       success: true,
       historyRecord: {
         ...inserted,
+        school_year_id: resolvedSchoolYearId,
+        school_year: resolvedSchoolYear,
         curriculum_snapshot: curriculumSnapshot,
       },
     };
@@ -4009,9 +4695,36 @@ export async function saveExternalHistoryRecordAction(payload: SaveExternalHisto
       return { success: false, error: "Informe ao menos um componente curricular/disciplina." };
     }
 
+    // Resolução de school_year_id
+    let resolvedSchoolYearId: string | null = payload.school_year_id || null;
+    let resolvedSchoolYear: any = null;
+
+    if (resolvedSchoolYearId) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", resolvedSchoolYearId)
+        .maybeSingle();
+      if (!sy) {
+        return { success: false, error: "O Ano Letivo oficial selecionado não foi encontrado nesta instituição." };
+      }
+      resolvedSchoolYear = sy;
+    } else if (payload.academic_year) {
+      const { data: sy } = await (supabase.from("school_years") as any)
+        .select("id, year, title, status, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("year", payload.academic_year.trim())
+        .maybeSingle();
+      if (sy) {
+        resolvedSchoolYear = sy;
+        resolvedSchoolYearId = sy.id;
+      }
+    }
+
     const row = {
       tenant_id: session.tenant.id,
       student_id: payload.student_id,
+      school_year_id: resolvedSchoolYearId || null,
       academic_year: payload.academic_year.trim(),
       grade_level: payload.grade_level.trim(),
       course_name: payload.course_name.trim(),
@@ -4061,6 +4774,8 @@ export async function saveExternalHistoryRecordAction(payload: SaveExternalHisto
       success: true,
       historyRecord: {
         ...inserted,
+        school_year_id: resolvedSchoolYearId,
+        school_year: resolvedSchoolYear,
         curriculum_snapshot: payload.curriculum,
       },
     };
@@ -4089,29 +4804,44 @@ export async function rectifyHistoryRecordAction(payload: RectifyHistoryInput): 
       };
     }
 
-    // 1. Tenta executar via RPC atômica transacional no PostgreSQL
+    // 1. Tenta executar via RPC atômica transacional no PostgreSQL com verificação segura
+    const rpcPayload: any = {
+      p_tenant_id: session.tenant.id,
+      p_history_record_id: payload.history_record_id,
+      p_reason: payload.reason.trim(),
+      p_final_result: payload.updated_record.final_result || null,
+      p_observations: payload.updated_record.observations?.trim() || null,
+      p_school_name: payload.updated_record.school_name?.trim() || null,
+      p_school_city: payload.updated_record.school_city?.trim() || null,
+      p_school_state: payload.updated_record.school_state?.trim() || null,
+      p_total_days: payload.updated_record.total_days ?? null,
+      p_total_workload_hours: payload.updated_record.total_workload_hours ?? null,
+      p_attendance_percentage: payload.updated_record.attendance_percentage ?? null,
+      p_curriculum: payload.updated_record.curriculum ?? null,
+      p_user_id: session.user.id,
+      p_user_name: session.profile.full_name || session.user.email,
+      p_user_email: session.user.email,
+      p_user_role: session.role,
+    };
+    if (payload.updated_record.school_year_id) {
+      rpcPayload.p_school_year_id = payload.updated_record.school_year_id;
+    }
+
     try {
-      const { data: rpcResult, error: rpcError } = await (supabase.rpc as any)(
+      let { data: rpcResult, error: rpcError } = await (supabase.rpc as any)(
         "rectify_student_history_record",
-        {
-          p_tenant_id: session.tenant.id,
-          p_history_record_id: payload.history_record_id,
-          p_reason: payload.reason.trim(),
-          p_final_result: payload.updated_record.final_result || null,
-          p_observations: payload.updated_record.observations?.trim() || null,
-          p_school_name: payload.updated_record.school_name?.trim() || null,
-          p_school_city: payload.updated_record.school_city?.trim() || null,
-          p_school_state: payload.updated_record.school_state?.trim() || null,
-          p_total_days: payload.updated_record.total_days ?? null,
-          p_total_workload_hours: payload.updated_record.total_workload_hours ?? null,
-          p_attendance_percentage: payload.updated_record.attendance_percentage ?? null,
-          p_curriculum: payload.updated_record.curriculum ?? null,
-          p_user_id: session.user.id,
-          p_user_name: session.profile.full_name || session.user.email,
-          p_user_email: session.user.email,
-          p_user_role: session.role,
-        }
+        rpcPayload
       );
+
+      if (rpcError && rpcError.message?.includes("p_school_year_id")) {
+        delete rpcPayload.p_school_year_id;
+        const retryRpc = await (supabase.rpc as any)(
+          "rectify_student_history_record",
+          rpcPayload
+        );
+        rpcResult = retryRpc.data;
+        rpcError = retryRpc.error;
+      }
 
       if (!rpcError && rpcResult) {
         revalidatePath("/app/academico/historico");
@@ -4124,7 +4854,7 @@ export async function rectifyHistoryRecordAction(payload: RectifyHistoryInput): 
         };
       }
     } catch {
-      // Se RPC não estiver disponível (ex: ambiente de teste sem migração aplicada), prossegue para fallback
+      // Fallback
     }
 
     // 2. Fallback: Busca o registro atual e atualiza mantendo integridade
@@ -4141,7 +4871,7 @@ export async function rectifyHistoryRecordAction(payload: RectifyHistoryInput): 
     const previousSnapshot = { ...existing };
 
     // Prepara atualização
-    const updatedRow = {
+    const updatedRow: any = {
       school_name: payload.updated_record.school_name?.trim() || existing.school_name,
       school_city: payload.updated_record.school_city?.trim() ?? existing.school_city,
       school_state: payload.updated_record.school_state?.trim() ?? existing.school_state,
@@ -4153,6 +4883,10 @@ export async function rectifyHistoryRecordAction(payload: RectifyHistoryInput): 
       curriculum_snapshot: payload.updated_record.curriculum || existing.curriculum_snapshot,
       updated_at: new Date().toISOString(),
     };
+
+    if (payload.updated_record.school_year_id !== undefined) {
+      updatedRow.school_year_id = payload.updated_record.school_year_id;
+    }
 
     const { data: updated, error: updateErr } = await (supabase.from("student_academic_history_records") as any)
       .update(updatedRow)

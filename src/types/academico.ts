@@ -1,3 +1,6 @@
+import { SchoolYear, AcademicTerm } from "./calendario";
+export type { SchoolYear, AcademicTerm } from "./calendario";
+
 export type AcademicShift = "matutino" | "vespertino" | "noturno" | "integral";
 
 export interface Course {
@@ -29,6 +32,7 @@ export interface SchoolClass {
   id: string;
   tenant_id: string;
   series_id: string;
+  school_year_id?: string | null;
   name: string;
   academic_year: string;
   shift: AcademicShift;
@@ -37,6 +41,7 @@ export interface SchoolClass {
   created_at: string;
   updated_at: string;
   series?: Series;
+  school_year?: SchoolYear | null;
   students_enrolled_count?: number;
 }
 
@@ -75,8 +80,9 @@ export interface UpdateSeriesInput {
 // DTOs para Turmas
 export interface CreateSchoolClassInput {
   series_id: string;
+  school_year_id?: string | null;
   name: string;
-  academic_year: string;
+  academic_year?: string;
   shift: AcademicShift;
   capacity: number;
   is_active?: boolean;
@@ -85,8 +91,9 @@ export interface CreateSchoolClassInput {
 export interface UpdateSchoolClassInput {
   id: string;
   series_id: string;
+  school_year_id?: string | null;
   name: string;
-  academic_year: string;
+  academic_year?: string;
   shift: AcademicShift;
   capacity: number;
   is_active: boolean;
@@ -130,6 +137,8 @@ export interface ClassLesson {
   id: string;
   tenant_id: string;
   class_id: string;
+  school_year_id?: string | null;
+  academic_term_id?: string | null;
   teacher_id: string;
   lesson_date: string; // YYYY-MM-DD
   academic_period: string;
@@ -141,6 +150,8 @@ export interface ClassLesson {
   updated_at: string;
   teacher_name?: string;
   class_name?: string;
+  school_year?: SchoolYear | null;
+  academic_term?: AcademicTerm | null;
   attendances_count?: number;
   present_count?: number;
   absent_count?: number;
@@ -166,8 +177,10 @@ export interface LessonAttendance {
 export interface SaveClassLessonInput {
   id?: string;
   class_id: string;
+  school_year_id?: string | null;
+  academic_term_id?: string | null;
   lesson_date: string;
-  academic_period: string;
+  academic_period?: string;
   subject_name?: string;
   title: string;
   content_summary: string;
@@ -253,6 +266,8 @@ export interface AcademicAssessment {
   id: string;
   tenant_id: string;
   class_id: string;
+  school_year_id?: string | null;
+  academic_term_id?: string | null;
   subject_name: string;
   academic_period: string;
   title: string;
@@ -267,6 +282,8 @@ export interface AcademicAssessment {
   updated_at: string;
   class_name?: string;
   creator_name?: string;
+  school_year?: SchoolYear | null;
+  academic_term?: AcademicTerm | null;
   grades_count?: number;
   average_score?: number;
 }
@@ -291,6 +308,7 @@ export interface AcademicPeriodClosing {
   id: string;
   tenant_id: string;
   class_id: string;
+  academic_term_id?: string | null;
   academic_period: string;
   subject_name?: string | null;
   is_closed: boolean;
@@ -298,14 +316,17 @@ export interface AcademicPeriodClosing {
   closed_by?: string | null;
   closure_notes?: string | null;
   closer_name?: string;
+  academic_term?: AcademicTerm | null;
 }
 
 // DTOs para Avaliação
 export interface SaveAssessmentInput {
   id?: string;
   class_id: string;
+  school_year_id?: string | null;
+  academic_term_id?: string | null;
   subject_name: string;
-  academic_period: string;
+  academic_period?: string;
   title: string;
   description?: string;
   assessment_date: string;
@@ -330,6 +351,7 @@ export interface SaveStudentGradesInput {
 
 export interface TogglePeriodClosingInput {
   class_id: string;
+  academic_term_id?: string | null;
   academic_period: string;
   subject_name?: string;
   is_closed: boolean;
@@ -351,8 +373,22 @@ export interface SaveAcademicSettingsInput {
 // ESTRUTURA DO BOLETIM ESCOLAR (REPORT CARD)
 // ==============================================================================
 
+export interface ReportCardTerm {
+  id?: string;
+  name: string;
+  term_type?: string;
+  sequence_order?: number;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  is_closed?: boolean;
+}
+
 export interface PeriodGradeDetail {
   period: string;
+  academic_term_id?: string | null;
+  term_status?: string;
+  sequence_order?: number;
   assessments: {
     id: string;
     title: string;
@@ -389,6 +425,9 @@ export interface StudentReportCard {
   enrollment_number?: string | null;
   school_class: SchoolClass;
   academic_year: string;
+  school_year_id?: string | null;
+  school_year?: SchoolYear | null;
+  terms: ReportCardTerm[];
   settings: AcademicSettings;
   subjects: SubjectReportItem[];
   overall_average: number | null;
@@ -441,6 +480,7 @@ export interface StudentAcademicHistoryRecord {
   tenant_id: string;
   student_id: string;
   enrollment_id?: string | null;
+  school_year_id?: string | null;
   academic_year: string;
   grade_level: string;
   course_name: string;
@@ -462,6 +502,7 @@ export interface StudentAcademicHistoryRecord {
   created_at: string;
   updated_at: string;
   consolidator_name?: string | null;
+  school_year?: SchoolYear | null;
 }
 
 export interface HistoryRectification {
@@ -533,6 +574,7 @@ export interface CompleteStudentHistoryDocument {
 // DTOs para Histórico
 export interface SaveExternalHistoryInput {
   student_id: string;
+  school_year_id?: string | null;
   academic_year: string;
   grade_level: string;
   course_name: string;
@@ -552,6 +594,7 @@ export interface SaveExternalHistoryInput {
 export interface ConsolidateCurrentYearHistoryInput {
   student_id: string;
   enrollment_id: string;
+  school_year_id?: string | null;
   total_days?: number;
   total_workload_hours?: number;
   final_result: HistoryFinalResult;
@@ -561,7 +604,9 @@ export interface ConsolidateCurrentYearHistoryInput {
 export interface RectifyHistoryInput {
   history_record_id: string;
   reason: string;
-  updated_record: Partial<SaveExternalHistoryInput>;
+  updated_record: Partial<SaveExternalHistoryInput> & {
+    school_year_id?: string | null;
+  };
 }
 
 

@@ -3,6 +3,7 @@
 import React, { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Course, Series, SchoolClass, AcademicShift } from "@/types/academico";
+import { SchoolYear } from "@/types/calendario";
 import {
   saveCourseAction,
   deleteCourseAction,
@@ -42,6 +43,7 @@ interface AcademicoClientProps {
   initialCourses: Course[];
   initialSeries: Series[];
   initialClasses: SchoolClass[];
+  initialSchoolYears?: SchoolYear[];
   userRole: UserRole;
   schoolName: string;
 }
@@ -52,6 +54,7 @@ export function AcademicoClient({
   initialCourses,
   initialSeries,
   initialClasses,
+  initialSchoolYears = [],
   userRole,
   schoolName,
 }: AcademicoClientProps) {
@@ -60,6 +63,7 @@ export function AcademicoClient({
   const [courses, setCourses] = useState<Course[]>(initialCourses);
   const [seriesList, setSeriesList] = useState<Series[]>(initialSeries);
   const [classesList, setClassesList] = useState<SchoolClass[]>(initialClasses);
+  const [schoolYears, setSchoolYears] = useState<SchoolYear[]>(initialSchoolYears);
 
   useEffect(() => {
     setCourses(initialCourses);
@@ -72,6 +76,10 @@ export function AcademicoClient({
   useEffect(() => {
     setClassesList(initialClasses);
   }, [initialClasses]);
+
+  useEffect(() => {
+    setSchoolYears(initialSchoolYears);
+  }, [initialSchoolYears]);
 
   const [activeTab, setActiveTab] = useState<TabType>("courses");
   const [searchQuery, setSearchQuery] = useState("");
@@ -242,6 +250,7 @@ export function AcademicoClient({
   const handleSaveClass = async (data: {
     id?: string;
     series_id: string;
+    school_year_id?: string | null;
     name: string;
     academic_year: string;
     shift: AcademicShift;
@@ -257,6 +266,7 @@ export function AcademicoClient({
     setActionSuccess(data.id ? "Turma atualizada com sucesso!" : "Turma criada com sucesso!");
     const realClassId = res.id;
     const linkedSeries = seriesMap.get(data.series_id);
+    const matchedSy = schoolYears.find((y) => y.id === data.school_year_id);
 
     if (data.id) {
       setClassesList((prev) =>
@@ -265,6 +275,8 @@ export function AcademicoClient({
             ? {
                 ...c,
                 series_id: data.series_id,
+                school_year_id: data.school_year_id,
+                school_year: matchedSy || null,
                 series: linkedSeries,
                 name: data.name,
                 academic_year: data.academic_year,
@@ -282,6 +294,8 @@ export function AcademicoClient({
           id: realClassId,
           tenant_id: "",
           series_id: data.series_id,
+          school_year_id: data.school_year_id,
+          school_year: matchedSy || null,
           series: linkedSeries,
           name: data.name,
           academic_year: data.academic_year,
@@ -924,6 +938,7 @@ export function AcademicoClient({
         onSave={handleSaveClass}
         seriesList={seriesList.filter((s) => s.is_active)}
         courses={courses}
+        schoolYears={schoolYears}
         schoolClass={editingClass}
       />
     </div>

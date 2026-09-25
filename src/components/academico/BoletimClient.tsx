@@ -149,7 +149,15 @@ export function BoletimClient({
     window.print();
   };
 
-  const periodsList = ["1º Bimestre", "2º Bimestre", "3º Bimestre", "4º Bimestre"];
+  const effectiveTerms =
+    reportCard?.terms && reportCard.terms.length > 0
+      ? reportCard.terms
+      : [
+          { name: "1º Bimestre", sequence_order: 1, status: "aberto" },
+          { name: "2º Bimestre", sequence_order: 2, status: "aberto" },
+          { name: "3º Bimestre", sequence_order: 3, status: "aberto" },
+          { name: "4º Bimestre", sequence_order: 4, status: "aberto" },
+        ];
 
   return (
     <div className="space-y-6">
@@ -262,9 +270,16 @@ export function BoletimClient({
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">
                   BOLETIM ESCOLAR INDIVIDUAL
                 </h2>
-                <span className="text-xs text-slate-500">
-                  Ano Letivo: {reportCard.academic_year}
-                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-slate-500">
+                    Ano Letivo: {reportCard.school_year?.title || reportCard.academic_year}
+                  </span>
+                  {reportCard.school_year_id && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-2xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Calendário Oficial
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Status Geral do Aluno */}
@@ -335,9 +350,26 @@ export function BoletimClient({
               <thead>
                 <tr className="bg-slate-100/80 text-2xs uppercase tracking-wider font-bold text-slate-700 border-b border-slate-300">
                   <th className="py-3 px-3 border-r border-slate-200">Disciplina</th>
-                  {periodsList.map((p) => (
-                    <th key={p} className="py-3 px-2 text-center border-r border-slate-200 w-20">
-                      {p.replace("º Bimestre", "º Bim")}
+                  {effectiveTerms.map((term) => (
+                    <th key={term.name} className="py-3 px-2 text-center border-r border-slate-200 min-w-[75px]">
+                      <div className="flex flex-col items-center justify-center">
+                        <span>
+                          {term.name
+                            .replace("º Bimestre", "º Bim")
+                            .replace("º Trimestre", "º Tri")
+                            .replace("º Semestre", "º Sem")}
+                        </span>
+                        {term.status === "bloqueado" && (
+                          <span className="text-[9px] px-1 py-0.2 bg-rose-100 text-rose-700 rounded font-semibold mt-0.5">
+                            Bloqueado
+                          </span>
+                        )}
+                        {term.status === "fechado" && (
+                          <span className="text-[9px] px-1 py-0.2 bg-slate-200 text-slate-700 rounded font-semibold mt-0.5">
+                            Fechado
+                          </span>
+                        )}
+                      </div>
                     </th>
                   ))}
                   <th className="py-3 px-2 text-center border-r border-slate-200 w-20 bg-indigo-50/60 text-indigo-900">
@@ -352,7 +384,7 @@ export function BoletimClient({
               <tbody className="divide-y divide-slate-200 text-xs">
                 {reportCard.subjects.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-slate-400">
+                    <td colSpan={effectiveTerms.length + 6} className="py-8 text-center text-slate-400">
                       Nenhuma disciplina vinculada ou avaliações lançadas para esta turma.
                     </td>
                   </tr>
@@ -383,14 +415,14 @@ export function BoletimClient({
                             </div>
                           </td>
 
-                          {/* Notas dos Períodos */}
-                          {periodsList.map((pName) => {
-                            const pDetail = subj.periods[pName];
+                          {/* Notas dos Períodos Oficiais */}
+                          {effectiveTerms.map((term) => {
+                            const pDetail = subj.periods[term.name];
                             const grade = pDetail?.final_period_grade;
 
                             return (
                               <td
-                                key={pName}
+                                key={term.name}
                                 className="py-3 px-2 text-center border-r border-slate-200 font-bold"
                               >
                                 {grade !== null && grade !== undefined ? (
@@ -476,26 +508,38 @@ export function BoletimClient({
                         {/* Linha Expansível de Detalhamento das Avaliações */}
                         {isExpanded && (
                           <tr className="bg-slate-50/90 print:table-row">
-                            <td colSpan={10} className="p-4 border-b border-slate-200">
+                            <td colSpan={effectiveTerms.length + 6} className="p-4 border-b border-slate-200">
                               <div className="space-y-2">
                                 <span className="text-2xs font-bold uppercase tracking-wider text-slate-500 block">
                                   Composição das Avaliações • {subj.subject_name}
                                 </span>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                                  {periodsList.map((pName) => {
-                                    const pDetail = subj.periods[pName];
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  {effectiveTerms.map((term) => {
+                                    const pDetail = subj.periods[term.name];
                                     const assessList = pDetail?.assessments || [];
 
                                     return (
                                       <div
-                                        key={pName}
+                                        key={term.name}
                                         className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-1.5"
                                       >
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                                          <span className="font-bold text-xs text-slate-800">
-                                            {pName}
-                                          </span>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-bold text-xs text-slate-800">
+                                              {term.name}
+                                            </span>
+                                            {term.status === "bloqueado" && (
+                                              <span className="text-[8px] px-1 bg-rose-100 text-rose-700 rounded font-semibold">
+                                                Bloqueado
+                                              </span>
+                                            )}
+                                            {term.status === "fechado" && (
+                                              <span className="text-[8px] px-1 bg-slate-200 text-slate-700 rounded font-semibold">
+                                                Fechado
+                                              </span>
+                                            )}
+                                          </div>
                                           <span className="text-2xs font-bold text-indigo-600">
                                             {pDetail?.final_period_grade !== null
                                               ? `${pDetail.final_period_grade.toFixed(1)} pts`
@@ -550,7 +594,7 @@ export function BoletimClient({
                   <td className="py-3 px-3 border-r border-slate-200 uppercase tracking-wider text-slate-800">
                     Média Geral do Aluno
                   </td>
-                  <td colSpan={4} className="border-r border-slate-200"></td>
+                  <td colSpan={effectiveTerms.length} className="border-r border-slate-200"></td>
                   <td className="py-3 px-2 text-center border-r border-slate-200 text-indigo-700 text-sm">
                     {reportCard.overall_average !== null
                       ? reportCard.overall_average.toFixed(reportCard.settings.decimal_places)
