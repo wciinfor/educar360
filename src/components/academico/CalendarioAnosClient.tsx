@@ -234,12 +234,19 @@ export function CalendarioAnosClient({
     target_audience: "todos" as EventTargetAudience,
   });
 
-  const canManageAll = userRole === "admin_escola" || userRole === "coordenacao";
+  const canManageAll =
+    userRole === "admin_escola" || userRole === "coordenacao" || userRole === "secretaria";
   const isSecretaria = userRole === "secretaria";
 
   const currentYear = schoolYears.find((y) => y.id === selectedYearId) || schoolYears[0];
   const sortedTerms = currentYear?.academic_terms
     ? [...currentYear.academic_terms].sort((a, b) => a.sequence_order - b.sequence_order)
+    : [];
+
+  const modalSelectedYear =
+    schoolYears.find((y) => y.id === eventForm.school_year_id) || currentYear;
+  const modalSortedTerms = modalSelectedYear?.academic_terms
+    ? [...modalSelectedYear.academic_terms].sort((a, b) => a.sequence_order - b.sequence_order)
     : [];
 
   // Categorias que a secretaria tem permissão para cadastrar
@@ -447,6 +454,24 @@ export function CalendarioAnosClient({
     ) {
       return triggerError(
         `O período deve estar contido dentro do ano letivo (${currentYear.start_date} a ${currentYear.end_date}).`
+      );
+    }
+
+    // Validar sobreposição de datas com outras etapas do mesmo ano letivo
+    const newStart = new Date(termForm.start_date).getTime();
+    const newEnd = new Date(termForm.end_date).getTime();
+    const otherTerms = (currentYear.academic_terms || []).filter(
+      (t) => !editingTerm || t.id !== editingTerm.id
+    );
+    const hasOverlap = otherTerms.some((t) => {
+      const tStart = new Date(t.start_date).getTime();
+      const tEnd = new Date(t.end_date).getTime();
+      return newStart <= tEnd && newEnd >= tStart;
+    });
+
+    if (hasOverlap) {
+      return triggerError(
+        "As datas desta etapa sobrepõem o intervalo de outra etapa já cadastrada para este ano letivo."
       );
     }
 
@@ -673,7 +698,9 @@ export function CalendarioAnosClient({
 
   function handleSaveEvent(e: React.FormEvent) {
     e.preventDefault();
-    if (!currentYear) return;
+    const targetYear =
+      schoolYears.find((y) => y.id === eventForm.school_year_id) || currentYear;
+    if (!targetYear) return triggerError("Selecione um ano letivo.");
 
     if (!eventForm.category_id) return triggerError("Selecione a categoria do evento.");
     if (!eventForm.title.trim()) return triggerError("O título do evento é obrigatório.");
@@ -686,17 +713,19 @@ export function CalendarioAnosClient({
 
     // Validação com o ano letivo
     if (
-      new Date(eventForm.start_date) < new Date(currentYear.start_date) ||
-      new Date(finalEndDate) > new Date(currentYear.end_date)
+      new Date(eventForm.start_date) < new Date(targetYear.start_date) ||
+      new Date(finalEndDate) > new Date(targetYear.end_date)
     ) {
       return triggerError(
-        `O evento deve estar contido dentro do ano letivo selecionado (${currentYear.start_date} a ${currentYear.end_date}).`
+        `O evento deve estar contido dentro do ano letivo selecionado (${targetYear.start_date} a ${targetYear.end_date}).`
       );
     }
 
     // Validação com o período acadêmico se selecionado
     if (eventForm.academic_term_id) {
-      const term = sortedTerms.find((t) => t.id === eventForm.academic_term_id);
+      const term = (targetYear.academic_terms || []).find(
+        (t) => t.id === eventForm.academic_term_id
+      );
       if (term) {
         if (
           new Date(eventForm.start_date) < new Date(term.start_date) ||
@@ -713,6 +742,7 @@ export function CalendarioAnosClient({
       if (editingEvent) {
         const res = await updateCalendarEventAction({
           id: editingEvent.id,
+          school_year_id: eventForm.school_year_id,
           academic_term_id: eventForm.academic_term_id || null,
           category_id: eventForm.category_id,
           title: eventForm.title,
@@ -735,7 +765,7 @@ export function CalendarioAnosClient({
         }
       } else {
         const res = await createCalendarEventAction({
-          school_year_id: currentYear.id,
+          school_year_id: eventForm.school_year_id,
           academic_term_id: eventForm.academic_term_id || null,
           category_id: eventForm.category_id,
           title: eventForm.title,
@@ -1027,6 +1057,8 @@ export function CalendarioAnosClient({
       {activeTab === "visual" && currentYear && (
         <CalendarioVisualView
           schoolYear={currentYear}
+          schoolYears={schoolYears}
+          onSelectYear={(yearId) => setSelectedYearId(yearId)}
           categories={categories}
           events={events}
           terms={sortedTerms}
@@ -1050,16 +1082,62 @@ export function CalendarioAnosClient({
         />
       )}
 
+      {activeTab === "visual" && !currentYear && (
+        <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-300 text-center space-y-4 max-w-lg mx-auto my-8">
+          <CalendarDays className="w-12 h-12 text-slate-300 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">Nenhum Ano Letivo Cadastrado</h3>
+            <p className="text-xs text-slate-500">
+              Para visualizar o calendário escolar, configure primeiro o ano letivo na aba &quot;Anos Letivos & Etapas&quot;.
+            </p>
+          </div>
+          {canManageAll && (
+            <button
+              type="button"
+              onClick={() => handleOpenYearModal()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Ano Letivo</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* ============================================================================== */}
       {/* ABA: CONTROLE DE DIAS LETIVOS (ETAPA 4) */}
       {/* ============================================================================== */}
       {activeTab === "dias_letivos" && currentYear && (
         <ControleDiasLetivosView
           schoolYear={currentYear}
+          schoolYears={schoolYears}
+          onSelectYear={(yearId) => setSelectedYearId(yearId)}
           events={events}
           categories={categories}
           terms={sortedTerms}
         />
+      )}
+
+      {activeTab === "dias_letivos" && !currentYear && (
+        <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-300 text-center space-y-4 max-w-lg mx-auto my-8">
+          <CalendarDays className="w-12 h-12 text-slate-300 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">Nenhum Ano Letivo Cadastrado</h3>
+            <p className="text-xs text-slate-500">
+              Para controlar os dias letivos, configure primeiro o ano letivo na aba &quot;Anos Letivos & Etapas&quot;.
+            </p>
+          </div>
+          {canManageAll && (
+            <button
+              type="button"
+              onClick={() => handleOpenYearModal()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Ano Letivo</span>
+            </button>
+          )}
+        </div>
       )}
 
       {/* ============================================================================== */}
@@ -1068,11 +1146,35 @@ export function CalendarioAnosClient({
       {activeTab === "relatorio" && currentYear && (
         <RelatorioCalendarioView
           schoolYear={currentYear}
+          schoolYears={schoolYears}
+          onSelectYear={(yearId) => setSelectedYearId(yearId)}
           events={events}
           categories={categories}
           terms={sortedTerms}
           schoolName={schoolName}
         />
+      )}
+
+      {activeTab === "relatorio" && !currentYear && (
+        <div className="bg-white p-12 rounded-3xl border border-dashed border-slate-300 text-center space-y-4 max-w-lg mx-auto my-8">
+          <CalendarDays className="w-12 h-12 text-slate-300 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="text-base font-bold text-slate-800">Nenhum Ano Letivo Cadastrado</h3>
+            <p className="text-xs text-slate-500">
+              Para gerar o relatório oficial do calendário, configure primeiro o ano letivo na aba &quot;Anos Letivos & Etapas&quot;.
+            </p>
+          </div>
+          {canManageAll && (
+            <button
+              type="button"
+              onClick={() => handleOpenYearModal()}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Ano Letivo</span>
+            </button>
+          )}
+        </div>
       )}
 
       {/* ============================================================================== */}
@@ -1086,6 +1188,16 @@ export function CalendarioAnosClient({
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Anos Cadastrados ({schoolYears.length})
               </h3>
+              {canManageAll && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenYearModal()}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Novo Ano</span>
+                </button>
+              )}
             </div>
 
             {schoolYears.length === 0 ? (
@@ -2278,7 +2390,9 @@ export function CalendarioAnosClient({
                   <h3 className="text-lg font-bold text-slate-900">
                     {editingEvent ? "Editar Evento / Data" : "Novo Evento no Calendário"}
                   </h3>
-                  <span className="text-xs text-slate-500">Ano: {currentYear.title}</span>
+                  <span className="text-xs text-slate-500">
+                    Ano Selecionado: {modalSelectedYear?.title || currentYear.title}
+                  </span>
                 </div>
               </div>
               <button
@@ -2305,10 +2419,38 @@ export function CalendarioAnosClient({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Categoria do Evento *
+                    Ano Letivo *
+                  </label>
+                  <select
+                    required
+                    value={eventForm.school_year_id}
+                    onChange={(e) => {
+                      const newYearId = e.target.value;
+                      const targetYear = schoolYears.find((y) => y.id === newYearId);
+                      setEventForm({
+                        ...eventForm,
+                        school_year_id: newYearId,
+                        academic_term_id: "",
+                        start_date: targetYear?.start_date || eventForm.start_date,
+                        end_date: targetYear?.start_date || eventForm.end_date,
+                      });
+                    }}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    {schoolYears.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.year} - {y.title} {y.is_current ? "(Atual)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Categoria *
                   </label>
                   <select
                     required
@@ -2321,9 +2463,9 @@ export function CalendarioAnosClient({
                         is_school_day: selectedCat?.is_school_day ?? false,
                       });
                     }}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
-                    <option value="">Selecione uma categoria...</option>
+                    <option value="">Selecione...</option>
                     {allowedCategoriesForUser.map((cat) => (
                       <option key={cat.id} value={cat.id}>
                         {cat.name} {cat.is_school_day ? "(Letivo)" : "(Não letivo)"}
@@ -2341,10 +2483,10 @@ export function CalendarioAnosClient({
                     onChange={(e) =>
                       setEventForm({ ...eventForm, academic_term_id: e.target.value })
                     }
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   >
-                    <option value="">Nenhum (Válido para todo o ano)</option>
-                    {sortedTerms.map((t) => (
+                    <option value="">Nenhum (Todo o ano)</option>
+                    {modalSortedTerms.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.name} ({t.code})
                       </option>
@@ -2361,8 +2503,8 @@ export function CalendarioAnosClient({
                   <input
                     type="date"
                     required
-                    min={currentYear.start_date}
-                    max={currentYear.end_date}
+                    min={modalSelectedYear?.start_date}
+                    max={modalSelectedYear?.end_date}
                     value={eventForm.start_date}
                     onChange={(e) => {
                       const newStart = e.target.value;
@@ -2383,8 +2525,8 @@ export function CalendarioAnosClient({
                   <input
                     type="date"
                     required
-                    min={eventForm.start_date || currentYear.start_date}
-                    max={currentYear.end_date}
+                    min={eventForm.start_date || modalSelectedYear?.start_date}
+                    max={modalSelectedYear?.end_date}
                     value={eventForm.end_date}
                     onChange={(e) => setEventForm({ ...eventForm, end_date: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"

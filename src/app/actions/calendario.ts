@@ -144,7 +144,7 @@ export async function createSchoolYearAction(
   input: CreateSchoolYearInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const year = input.year?.trim();
@@ -213,7 +213,7 @@ export async function updateSchoolYearAction(
   input: UpdateSchoolYearInput
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     if (!input.id) return { success: false, error: "ID do ano letivo é obrigatório." };
@@ -290,7 +290,7 @@ export async function setCurrentSchoolYearAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     // 1. Remove is_current de todos os anos do tenant
@@ -331,7 +331,7 @@ export async function deleteSchoolYearAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const { data: existing, error: findErr } = await (supabase.from("school_years") as any)
@@ -474,7 +474,7 @@ export async function createAcademicTermAction(
   input: CreateAcademicTermInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const name = input.name?.trim();
@@ -509,6 +509,29 @@ export async function createAcademicTermAction(
         success: false,
         error: `As datas do período devem estar compreendidas dentro do ano letivo (${schoolYear.start_date} a ${schoolYear.end_date}).`,
       };
+    }
+
+    // Validação de sobreposição de datas com outros períodos do mesmo ano letivo
+    const { data: existingTerms } = await (supabase.from("academic_terms") as any)
+      .select("id, name, start_date, end_date")
+      .eq("tenant_id", session.tenant.id)
+      .eq("school_year_id", input.school_year_id);
+
+    if (existingTerms && existingTerms.length > 0) {
+      const newStart = new Date(startDate + "T00:00:00").getTime();
+      const newEnd = new Date(endDate + "T23:59:59").getTime();
+
+      for (const t of existingTerms) {
+        const tStart = new Date(t.start_date + "T00:00:00").getTime();
+        const tEnd = new Date(t.end_date + "T23:59:59").getTime();
+
+        if (newStart <= tEnd && newEnd >= tStart) {
+          return {
+            success: false,
+            error: `As datas informadas (${startDate} a ${endDate}) sobrepõem as datas do período '${t.name}' (${t.start_date} a ${t.end_date}).`,
+          };
+        }
+      }
     }
 
     const { data, error } = await (supabase.from("academic_terms") as any)
@@ -556,7 +579,7 @@ export async function updateAcademicTermAction(
   input: UpdateAcademicTermInput
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     if (!input.id) return { success: false, error: "ID do período é obrigatório." };
@@ -596,6 +619,30 @@ export async function updateAcademicTermAction(
           success: false,
           error: `As datas do período devem estar compreendidas dentro do ano letivo (${existing.school_year.start_date} a ${existing.school_year.end_date}).`,
         };
+      }
+    }
+
+    // Validação de sobreposição de datas com outros períodos do mesmo ano letivo (excluindo o próprio)
+    const { data: otherTerms } = await (supabase.from("academic_terms") as any)
+      .select("id, name, start_date, end_date")
+      .eq("tenant_id", session.tenant.id)
+      .eq("school_year_id", existing.school_year_id)
+      .neq("id", input.id);
+
+    if (otherTerms && otherTerms.length > 0) {
+      const newStart = new Date(finalStart + "T00:00:00").getTime();
+      const newEnd = new Date(finalEnd + "T23:59:59").getTime();
+
+      for (const t of otherTerms) {
+        const tStart = new Date(t.start_date + "T00:00:00").getTime();
+        const tEnd = new Date(t.end_date + "T23:59:59").getTime();
+
+        if (newStart <= tEnd && newEnd >= tStart) {
+          return {
+            success: false,
+            error: `As datas informadas (${finalStart} a ${finalEnd}) sobrepõem as datas do período '${t.name}' (${t.start_date} a ${t.end_date}).`,
+          };
+        }
       }
     }
 
@@ -718,7 +765,7 @@ export async function createCalendarEventCategoryAction(
   input: CreateCalendarEventCategoryInput
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const name = input.name?.trim();
@@ -776,7 +823,7 @@ export async function updateCalendarEventCategoryAction(
   input: UpdateCalendarEventCategoryInput
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     if (!input.id) return { success: false, error: "ID da categoria é obrigatório." };
@@ -794,7 +841,7 @@ export async function updateCalendarEventCategoryAction(
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
 
     if (input.name !== undefined) updates.name = input.name.trim();
-    if (input.slug !== undefined) updates.slug = slugify(input.slug);
+    if (input.slug !== undefined && !existing.is_system) updates.slug = slugify(input.slug);
     if (input.description !== undefined) updates.description = input.description?.trim() || null;
     if (input.color_hex !== undefined) updates.color_hex = input.color_hex;
     if (input.is_school_day !== undefined) updates.is_school_day = input.is_school_day;
@@ -834,7 +881,7 @@ export async function deleteCalendarEventCategoryAction(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const { data: existing, error: findErr } = await (supabase.from("calendar_event_categories") as any)
@@ -898,7 +945,7 @@ export async function seedDefaultCalendarCategoriesAction(): Promise<{
   error?: string;
 }> {
   try {
-    const session = await assertCalendarAccess(["admin_escola", "coordenacao"]);
+    const session = await assertCalendarAccess(["admin_escola", "coordenacao", "secretaria"]);
     const supabase = await createClient();
 
     const defaultCategories = [
@@ -1231,6 +1278,19 @@ export async function updateCalendarEventAction(
 
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
 
+    if (input.school_year_id !== undefined) {
+      const { data: sy, error: syErr } = await (supabase.from("school_years") as any)
+        .select("id, start_date, end_date")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", input.school_year_id)
+        .single();
+
+      if (syErr || !sy) {
+        return { success: false, error: "Ano letivo selecionado não encontrado." };
+      }
+      updates.school_year_id = input.school_year_id;
+    }
+
     if (input.title !== undefined) updates.title = input.title.trim();
     if (input.description !== undefined) updates.description = input.description?.trim() || null;
     if (input.start_date !== undefined) updates.start_date = input.start_date;
@@ -1249,14 +1309,21 @@ export async function updateCalendarEventAction(
     }
 
     // Validação temporal com o ano letivo
-    if (existing.school_year) {
+    const targetSchoolYearId = updates.school_year_id || existing.school_year_id;
+    const { data: activeYear } = await (supabase.from("school_years") as any)
+      .select("start_date, end_date")
+      .eq("tenant_id", session.tenant.id)
+      .eq("id", targetSchoolYearId)
+      .single();
+
+    if (activeYear) {
       if (
-        new Date(finalStart) < new Date(existing.school_year.start_date) ||
-        new Date(finalEnd) > new Date(existing.school_year.end_date)
+        new Date(finalStart) < new Date(activeYear.start_date) ||
+        new Date(finalEnd) > new Date(activeYear.end_date)
       ) {
         return {
           success: false,
-          error: `As datas do evento (${finalStart} a ${finalEnd}) devem estar contidas no intervalo do ano letivo (${existing.school_year.start_date} a ${existing.school_year.end_date}).`,
+          error: `As datas do evento (${finalStart} a ${finalEnd}) devem estar contidas no intervalo do ano letivo (${activeYear.start_date} a ${activeYear.end_date}).`,
         };
       }
     }
@@ -1267,7 +1334,7 @@ export async function updateCalendarEventAction(
       const { data: term, error: tErr } = await (supabase.from("academic_terms") as any)
         .select("id, start_date, end_date")
         .eq("tenant_id", session.tenant.id)
-        .eq("school_year_id", existing.school_year_id)
+        .eq("school_year_id", targetSchoolYearId)
         .eq("id", targetTermId)
         .maybeSingle();
 

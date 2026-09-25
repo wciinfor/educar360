@@ -35,6 +35,8 @@ import clsx from "clsx";
 
 interface CalendarioVisualViewProps {
   schoolYear: SchoolYear;
+  schoolYears?: SchoolYear[];
+  onSelectYear?: (yearId: string) => void;
   categories: CalendarEventCategory[];
   events: CalendarEvent[];
   terms: AcademicTerm[];
@@ -72,8 +74,16 @@ const AUDIENCE_LABELS: Record<EventTargetAudience, string> = {
   secretaria: "Secretaria Escolar",
 };
 
+function formatLocalDateKey(year: number, month: number, day: number): string {
+  const m = String(month + 1).padStart(2, "0");
+  const d = String(day).padStart(2, "0");
+  return `${year}-${m}-${d}`;
+}
+
 export function CalendarioVisualView({
   schoolYear,
+  schoolYears,
+  onSelectYear,
   categories,
   events,
   terms,
@@ -99,6 +109,19 @@ export function CalendarioVisualView({
     return new Date();
   });
 
+  // Sincroniza currentDate quando o ano letivo selecionado mudar
+  React.useEffect(() => {
+    if (schoolYear.start_date) {
+      const yearNum = parseInt(schoolYear.year, 10);
+      const today = new Date();
+      if (!isNaN(yearNum) && today.getFullYear() === yearNum) {
+        setCurrentDate(today);
+      } else {
+        setCurrentDate(new Date(schoolYear.start_date + "T00:00:00"));
+      }
+    }
+  }, [schoolYear.id, schoolYear.year, schoolYear.start_date]);
+
   // Filtros
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedTerm, setSelectedTerm] = useState<string>("all");
@@ -111,7 +134,8 @@ export function CalendarioVisualView({
     events: CalendarEvent[];
   } | null>(null);
 
-  const canManageAll = userRole === "admin_escola" || userRole === "coordenacao";
+  const canManageAll =
+    userRole === "admin_escola" || userRole === "coordenacao" || userRole === "secretaria";
   const isSecretaria = userRole === "secretaria";
 
   // Eventos filtrados para o ano atual
@@ -159,16 +183,21 @@ export function CalendarioVisualView({
       isSchoolDay: boolean;
     }[] = [];
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const now = new Date();
+    const todayStr = formatLocalDateKey(now.getFullYear(), now.getMonth(), now.getDate());
 
     // Dias do mês anterior para completar a 1ª semana
+    const prevMonthIdx = month === 0 ? 11 : month - 1;
+    const prevYearNum = month === 0 ? year - 1 : year;
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const d = daysInPrevMonth - i;
-      const date = new Date(year, month - 1, d);
-      const dateStr = date.toISOString().split("T")[0];
+      const date = new Date(prevYearNum, prevMonthIdx, d);
+      const dateStr = formatLocalDateKey(prevYearNum, prevMonthIdx, d);
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
-      const dayEvents = filteredEvents.filter((ev) => dateStr >= ev.start_date && dateStr <= ev.end_date);
+      const dayEvents = filteredEvents.filter(
+        (ev) => dateStr >= ev.start_date && dateStr <= ev.end_date
+      );
       const hasLetivoEvent = dayEvents.some((ev) => ev.is_school_day);
       const hasNaoLetivoEvent = dayEvents.some((ev) => !ev.is_school_day);
       const isSchoolDay = hasLetivoEvent ? true : hasNaoLetivoEvent ? false : !isWeekend;
@@ -188,12 +217,12 @@ export function CalendarioVisualView({
     // Dias do mês atual
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(year, month, d);
-      const monthFormatted = String(month + 1).padStart(2, "0");
-      const dayFormatted = String(d).padStart(2, "0");
-      const dateStr = `${year}-${monthFormatted}-${dayFormatted}`;
+      const dateStr = formatLocalDateKey(year, month, d);
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
-      const dayEvents = filteredEvents.filter((ev) => dateStr >= ev.start_date && dateStr <= ev.end_date);
+      const dayEvents = filteredEvents.filter(
+        (ev) => dateStr >= ev.start_date && dateStr <= ev.end_date
+      );
       const hasLetivoEvent = dayEvents.some((ev) => ev.is_school_day);
       const hasNaoLetivoEvent = dayEvents.some((ev) => !ev.is_school_day);
       const isSchoolDay = hasLetivoEvent ? true : hasNaoLetivoEvent ? false : !isWeekend;
@@ -211,13 +240,17 @@ export function CalendarioVisualView({
     }
 
     // Dias do próximo mês para completar 42 células (6 semanas x 7)
+    const nextMonthIdx = month === 11 ? 0 : month + 1;
+    const nextYearNum = month === 11 ? year + 1 : year;
     const remainingDays = 42 - days.length;
     for (let d = 1; d <= remainingDays; d++) {
-      const date = new Date(year, month + 1, d);
-      const dateStr = date.toISOString().split("T")[0];
+      const date = new Date(nextYearNum, nextMonthIdx, d);
+      const dateStr = formatLocalDateKey(nextYearNum, nextMonthIdx, d);
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
-      const dayEvents = filteredEvents.filter((ev) => dateStr >= ev.start_date && dateStr <= ev.end_date);
+      const dayEvents = filteredEvents.filter(
+        (ev) => dateStr >= ev.start_date && dateStr <= ev.end_date
+      );
       const hasLetivoEvent = dayEvents.some((ev) => ev.is_school_day);
       const hasNaoLetivoEvent = dayEvents.some((ev) => !ev.is_school_day);
       const isSchoolDay = hasLetivoEvent ? true : hasNaoLetivoEvent ? false : !isWeekend;
@@ -359,7 +392,26 @@ export function CalendarioVisualView({
         </div>
 
         {/* Linha de Filtros Rápidos */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 border-t border-slate-100 pt-3">
+          {schoolYears && onSelectYear && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Ano Letivo
+              </label>
+              <select
+                value={schoolYear.id}
+                onChange={(e) => onSelectYear(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
+                {schoolYears.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.year} - {y.title} {y.is_current ? "(Atual)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
               Filtrar Categoria

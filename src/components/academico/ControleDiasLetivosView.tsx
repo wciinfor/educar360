@@ -27,6 +27,8 @@ import clsx from "clsx";
 
 interface ControleDiasLetivosViewProps {
   schoolYear: SchoolYear;
+  schoolYears?: SchoolYear[];
+  onSelectYear?: (yearId: string) => void;
   events: CalendarEvent[];
   categories: CalendarEventCategory[];
   terms: AcademicTerm[];
@@ -49,6 +51,8 @@ const MONTH_NAMES = [
 
 export function ControleDiasLetivosView({
   schoolYear,
+  schoolYears,
+  onSelectYear,
   events,
   categories,
   terms,
@@ -290,7 +294,24 @@ export function ControleDiasLetivosView({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            {schoolYears && onSelectYear && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-600">Ano:</span>
+                <select
+                  value={schoolYear.id}
+                  onChange={(e) => onSelectYear(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  {schoolYears.map((y) => (
+                    <option key={y.id} value={y.id}>
+                      {y.year} - {y.title} {y.is_current ? "(Atual)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <span
               className={clsx(
                 "px-3.5 py-1.5 rounded-2xl text-xs font-extrabold border flex items-center gap-1.5 shadow-2xs",
@@ -306,51 +327,51 @@ export function ControleDiasLetivosView({
               )}
               <span>
                 {calculation.saldoProgramado >= 0
-                  ? `Meta Atendida na Grade (${calculation.diasLetivosProgramados}/${calculation.metaPlanejada})`
-                  : `Déficit de Grade (Faltam programar ${Math.abs(calculation.saldoProgramado)} dias)`}
+                  ? `Meta Atendida (${calculation.diasLetivosProgramados}/${calculation.metaPlanejada})`
+                  : `Déficit de Grade (Faltam ${Math.abs(calculation.saldoProgramado)} dias)`}
               </span>
             </span>
           </div>
         </div>
 
-        {/* 4 Cards de Indicadores Chave (KPIs) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 5 Cards de Indicadores Chave (KPIs) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           {/* Card 1: Meta Planejada */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-              1. Meta Planejada (LDB)
+              1. Meta Planejada
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-extrabold text-slate-900">
                 {calculation.metaPlanejada}
               </span>
-              <span className="text-xs font-semibold text-slate-500">dias letivos</span>
+              <span className="text-xs font-semibold text-slate-500">dias</span>
             </div>
             <span className="text-[11px] text-slate-500 block">
-              Meta cadastrada no ano letivo
+              Exigência LDB
             </span>
           </div>
 
           {/* Card 2: Programado no Calendário */}
           <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
             <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">
-              2. Programado no Calendário
+              2. Programado
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-extrabold text-indigo-900">
                 {calculation.diasLetivosProgramados}
               </span>
-              <span className="text-xs font-semibold text-indigo-700">dias calculados</span>
+              <span className="text-xs font-semibold text-indigo-700">dias</span>
             </div>
             <span className="text-[11px] text-indigo-700/80 block">
-              {calculation.diasLetivosOrdinarios} ordinários + {calculation.sabadosLetivos} sábados
+              {calculation.diasLetivosOrdinarios} ord. + {calculation.sabadosLetivos} sáb.
             </span>
           </div>
 
           {/* Card 3: Saldo de Dias Programados */}
           <div className={clsx("p-4 rounded-2xl border space-y-1.5", saldoColor)}>
             <span className="text-[11px] font-bold uppercase tracking-wider block opacity-90">
-              3. Saldo da Grade Anual
+              3. Saldo vs Meta
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-extrabold">
@@ -358,37 +379,50 @@ export function ControleDiasLetivosView({
                   ? `+${calculation.saldoProgramado}`
                   : calculation.saldoProgramado}
               </span>
-              <span className="text-xs font-semibold">dias de margem</span>
+              <span className="text-xs font-semibold">dias</span>
             </div>
             <span className="text-[11px] opacity-80 block">
               {calculation.saldoProgramado >= 0
-                ? "Grade cumpre a exigência mínima"
-                : "Necessário adicionar mais dias letivos"}
+                ? "Cumpre exigência"
+                : "Necessita reposição"}
             </span>
           </div>
 
-          {/* Card 4: Cumprimento Temporal até Hoje */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+          {/* Card 4: Decorrido até Hoje */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                4. Decorrido até Hoje
+                4. Decorrido
               </span>
-              <span className="text-[11px] font-bold text-slate-700">
-                {calculation.diasLetivosDecorridosAteHoje} / {calculation.diasLetivosProgramados}
+              <span className="text-[10px] font-bold text-slate-600 bg-slate-200/80 px-1.5 py-0.5 rounded-full">
+                {calculation.percentualDecorrido.toFixed(0)}%
               </span>
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-extrabold text-slate-900">
-                {calculation.percentualDecorrido.toFixed(1)}%
+                {calculation.diasLetivosDecorridosAteHoje}
               </span>
-              <span className="text-xs font-semibold text-slate-500">do total da meta</span>
+              <span className="text-xs font-semibold text-slate-500">dias</span>
             </div>
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-indigo-600 h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(calculation.percentualDecorrido, 100)}%` }}
-              />
+            <span className="text-[11px] text-slate-500 block">
+              Até a data atual
+            </span>
+          </div>
+
+          {/* Card 5: Dias Restantes */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              5. Restantes
+            </span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-extrabold text-slate-900">
+                {calculation.diasLetivosRestantes}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">dias</span>
             </div>
+            <span className="text-[11px] text-slate-500 block">
+              A decorrer no ano
+            </span>
           </div>
         </div>
 

@@ -25,6 +25,8 @@ import clsx from "clsx";
 
 interface RelatorioCalendarioViewProps {
   schoolYear: SchoolYear;
+  schoolYears?: SchoolYear[];
+  onSelectYear?: (yearId: string) => void;
   events: CalendarEvent[];
   categories: CalendarEventCategory[];
   terms: AcademicTerm[];
@@ -50,6 +52,8 @@ const WEEKDAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 export function RelatorioCalendarioView({
   schoolYear,
+  schoolYears,
+  onSelectYear,
   events,
   categories,
   terms,
@@ -278,7 +282,24 @@ export function RelatorioCalendarioView({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {schoolYears && onSelectYear && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600">Ano:</span>
+              <select
+                value={schoolYear.id}
+                onChange={(e) => onSelectYear(e.target.value)}
+                className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
+                {schoolYears.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.year} - {y.title} {y.is_current ? "(Atual)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => window.print()}

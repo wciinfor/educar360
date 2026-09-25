@@ -175,6 +175,7 @@ export interface CreateCalendarEventInput {
 
 export interface UpdateCalendarEventInput {
   id: string;
+  school_year_id?: string;
   academic_term_id?: string | null;
   category_id?: string;
   title?: string;
