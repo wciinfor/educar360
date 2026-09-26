@@ -257,14 +257,24 @@ export function CalendarioAnosClient({
   });
 
   // Atualizar dados completos do servidor
-  async function refreshData() {
+  async function refreshData(targetYearId?: string) {
     const [yearsRes, catsRes, eventsRes] = await Promise.all([
       getSchoolYearsAction(),
       getCalendarEventCategoriesAction(),
       getCalendarEventsAction(),
     ]);
 
-    if (yearsRes.success) setSchoolYears(yearsRes.schoolYears);
+    if (yearsRes.success) {
+      const list = yearsRes.schoolYears || [];
+      setSchoolYears(list);
+      setSelectedYearId((prev) => {
+        if (targetYearId && list.some((y) => y.id === targetYearId)) return targetYearId;
+        if (prev && list.some((y) => y.id === prev)) return prev;
+        const current = list.find((y) => y.is_current);
+        if (current) return current.id;
+        return list[0]?.id || "";
+      });
+    }
     if (catsRes.success) setCategories(catsRes.categories);
     if (eventsRes.success) setEvents(eventsRes.events);
   }
@@ -361,7 +371,7 @@ export function CalendarioAnosClient({
           setShowYearModal(false);
           triggerSuccess("Ano letivo cadastrado com sucesso!");
           if (res.id) setSelectedYearId(res.id);
-          await refreshData();
+          await refreshData(res.id);
         }
       }
     });

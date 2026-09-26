@@ -53,6 +53,11 @@ function slugify(text: string): string {
     .replace(/\-\-+/g, "-");
 }
 
+function revalidateCalendarPaths() {
+  revalidatePath("/app/academico/calendario");
+  revalidatePath("/app/academico");
+}
+
 // ==============================================================================
 // 1. ANOS LETIVOS (SCHOOL YEARS)
 // ==============================================================================
@@ -66,19 +71,28 @@ export async function getSchoolYearsAction(): Promise<{
     const session = await assertCalendarAccess();
     const supabase = await createClient();
 
-    const { data, error } = await (supabase.from("school_years") as any)
-      .select(`
-        *,
-        academic_terms (*)
-      `)
-      .eq("tenant_id", session.tenant.id)
-      .order("year", { ascending: false });
+    const [yearsRes, termsRes] = await Promise.all([
+      (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .order("year", { ascending: false }),
+      (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .order("sequence_order", { ascending: true }),
+    ]);
 
-    if (error) {
-      return { success: false, schoolYears: [], error: error.message };
+    if (yearsRes.error) {
+      return { success: false, schoolYears: [], error: yearsRes.error.message };
     }
 
-    return { success: true, schoolYears: (data as SchoolYear[]) || [] };
+    const terms = (termsRes.data as AcademicTerm[]) || [];
+    const schoolYears = ((yearsRes.data as SchoolYear[]) || []).map((sy) => ({
+      ...sy,
+      academic_terms: terms.filter((t) => t.school_year_id === sy.id),
+    }));
+
+    return { success: true, schoolYears };
   } catch (err: any) {
     return { success: false, schoolYears: [], error: err?.message || "Erro ao listar anos letivos." };
   }
@@ -93,20 +107,29 @@ export async function getSchoolYearByIdAction(id: string): Promise<{
     const session = await assertCalendarAccess();
     const supabase = await createClient();
 
-    const { data, error } = await (supabase.from("school_years") as any)
-      .select(`
-        *,
-        academic_terms (*)
-      `)
-      .eq("tenant_id", session.tenant.id)
-      .eq("id", id)
-      .maybeSingle();
+    const [yearRes, termsRes] = await Promise.all([
+      (supabase.from("school_years") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", id)
+        .maybeSingle(),
+      (supabase.from("academic_terms") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id)
+        .eq("school_year_id", id)
+        .order("sequence_order", { ascending: true }),
+    ]);
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Ano letivo não encontrado." };
+    if (yearRes.error || !yearRes.data) {
+      return { success: false, error: yearRes.error?.message || "Ano letivo não encontrado." };
     }
 
-    return { success: true, schoolYear: data as SchoolYear };
+    const schoolYear: SchoolYear = {
+      ...yearRes.data,
+      academic_terms: (termsRes.data as AcademicTerm[]) || [],
+    };
+
+    return { success: true, schoolYear };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao buscar ano letivo." };
   }
@@ -121,20 +144,32 @@ export async function getCurrentSchoolYearAction(): Promise<{
     const session = await assertCalendarAccess();
     const supabase = await createClient();
 
-    const { data, error } = await (supabase.from("school_years") as any)
-      .select(`
-        *,
-        academic_terms (*)
-      `)
+    const { data: yearData, error: yearErr } = await (supabase.from("school_years") as any)
+      .select("*")
       .eq("tenant_id", session.tenant.id)
       .eq("is_current", true)
       .maybeSingle();
 
-    if (error) {
-      return { success: false, error: error.message };
+    if (yearErr) {
+      return { success: false, error: yearErr.message };
     }
 
-    return { success: true, schoolYear: data as SchoolYear | undefined };
+    if (!yearData) {
+      return { success: true, schoolYear: undefined };
+    }
+
+    const { data: termsData } = await (supabase.from("academic_terms") as any)
+      .select("*")
+      .eq("tenant_id", session.tenant.id)
+      .eq("school_year_id", yearData.id)
+      .order("sequence_order", { ascending: true });
+
+    const schoolYear: SchoolYear = {
+      ...yearData,
+      academic_terms: (termsData as AcademicTerm[]) || [],
+    };
+
+    return { success: true, schoolYear };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao buscar ano letivo atual." };
   }
@@ -202,7 +237,7 @@ export async function createSchoolYearAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true, id: data.id };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao criar ano letivo." };
@@ -279,7 +314,7 @@ export async function updateSchoolYearAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao atualizar ano letivo." };
@@ -320,7 +355,7 @@ export async function setCurrentSchoolYearAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao definir ano letivo corrente." };
@@ -394,7 +429,7 @@ export async function deleteSchoolYearAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao excluir ano letivo." };
@@ -417,10 +452,7 @@ export async function getAcademicTermsAction(
     const supabase = await createClient();
 
     let query = (supabase.from("academic_terms") as any)
-      .select(`
-        *,
-        school_year:school_years(id, year, title)
-      `)
+      .select("*")
       .eq("tenant_id", session.tenant.id)
       .order("sequence_order", { ascending: true });
 
@@ -428,13 +460,24 @@ export async function getAcademicTermsAction(
       query = query.eq("school_year_id", schoolYearId);
     }
 
-    const { data, error } = await query;
+    const [termsRes, yearsRes] = await Promise.all([
+      query,
+      (supabase.from("school_years") as any)
+        .select("id, year, title")
+        .eq("tenant_id", session.tenant.id),
+    ]);
 
-    if (error) {
-      return { success: false, academicTerms: [], error: error.message };
+    if (termsRes.error) {
+      return { success: false, academicTerms: [], error: termsRes.error.message };
     }
 
-    return { success: true, academicTerms: (data as AcademicTerm[]) || [] };
+    const yearMap = new Map<string, SchoolYear>((yearsRes.data || []).map((y: any) => [y.id, y as SchoolYear]));
+    const academicTerms: AcademicTerm[] = ((termsRes.data as AcademicTerm[]) || []).map((t) => ({
+      ...t,
+      school_year: yearMap.get(t.school_year_id),
+    }));
+
+    return { success: true, academicTerms };
   } catch (err: any) {
     return { success: false, academicTerms: [], error: err?.message || "Erro ao listar períodos acadêmicos." };
   }
@@ -451,20 +494,27 @@ export async function getAcademicTermByIdAction(
     const session = await assertCalendarAccess();
     const supabase = await createClient();
 
-    const { data, error } = await (supabase.from("academic_terms") as any)
-      .select(`
-        *,
-        school_year:school_years(id, year, title)
-      `)
+    const { data: termData, error: termErr } = await (supabase.from("academic_terms") as any)
+      .select("*")
       .eq("tenant_id", session.tenant.id)
       .eq("id", id)
       .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Período acadêmico não encontrado." };
+    if (termErr || !termData) {
+      return { success: false, error: termErr?.message || "Período acadêmico não encontrado." };
     }
 
-    return { success: true, academicTerm: data as AcademicTerm };
+    let school_year: SchoolYear | undefined = undefined;
+    if (termData.school_year_id) {
+      const { data: syData } = await (supabase.from("school_years") as any)
+        .select("id, year, title")
+        .eq("tenant_id", session.tenant.id)
+        .eq("id", termData.school_year_id)
+        .maybeSingle();
+      if (syData) school_year = syData as SchoolYear;
+    }
+
+    return { success: true, academicTerm: { ...termData, school_year } as AcademicTerm };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao buscar período acadêmico." };
   }
@@ -568,7 +618,7 @@ export async function createAcademicTermAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true, id: data.id };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao criar período acadêmico." };
@@ -668,7 +718,7 @@ export async function updateAcademicTermAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao atualizar período acadêmico." };
@@ -726,7 +776,7 @@ export async function deleteAcademicTermAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao excluir período acadêmico." };
@@ -812,7 +862,7 @@ export async function createCalendarEventCategoryAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true, id: data.id };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao criar categoria de evento." };
@@ -870,7 +920,7 @@ export async function updateCalendarEventCategoryAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao atualizar categoria de evento." };
@@ -932,7 +982,7 @@ export async function deleteCalendarEventCategoryAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao excluir categoria de evento." };
@@ -1032,7 +1082,7 @@ export async function seedDefaultCalendarCategoriesAction(): Promise<{
       }
     }
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true, insertedCount: inserted };
   } catch (err: any) {
     return { success: false, insertedCount: 0, error: err?.message || "Erro ao gerar categorias padrão." };
@@ -1055,12 +1105,7 @@ export async function getCalendarEventsAction(
     const supabase = await createClient();
 
     let query = (supabase.from("calendar_events") as any)
-      .select(`
-        *,
-        category:calendar_event_categories(*),
-        academic_term:academic_terms(id, name, code),
-        school_year:school_years(id, year, title)
-      `)
+      .select("*")
       .eq("tenant_id", session.tenant.id)
       .order("start_date", { ascending: true });
 
@@ -1083,13 +1128,41 @@ export async function getCalendarEventsAction(
       query = query.lte("start_date", filter.end_date).gte("end_date", filter.start_date);
     }
 
-    const { data, error } = await query;
+    const [eventsRes, catsRes, termsRes, yearsRes] = await Promise.all([
+      query,
+      (supabase.from("calendar_event_categories") as any)
+        .select("*")
+        .eq("tenant_id", session.tenant.id),
+      (supabase.from("academic_terms") as any)
+        .select("id, name, code")
+        .eq("tenant_id", session.tenant.id),
+      (supabase.from("school_years") as any)
+        .select("id, year, title")
+        .eq("tenant_id", session.tenant.id),
+    ]);
 
-    if (error) {
-      return { success: false, events: [], error: error.message };
+    if (eventsRes.error) {
+      return { success: false, events: [], error: eventsRes.error.message };
     }
 
-    return { success: true, events: (data as CalendarEvent[]) || [] };
+    const catMap = new Map<string, CalendarEventCategory>(
+      (catsRes.data || []).map((c: any) => [c.id, c as CalendarEventCategory])
+    );
+    const termMap = new Map<string, AcademicTerm>(
+      (termsRes.data || []).map((t: any) => [t.id, t as AcademicTerm])
+    );
+    const yearMap = new Map<string, SchoolYear>(
+      (yearsRes.data || []).map((y: any) => [y.id, y as SchoolYear])
+    );
+
+    const events: CalendarEvent[] = ((eventsRes.data as CalendarEvent[]) || []).map((ev) => ({
+      ...ev,
+      category: catMap.get(ev.category_id),
+      academic_term: ev.academic_term_id ? termMap.get(ev.academic_term_id) : undefined,
+      school_year: ev.school_year_id ? yearMap.get(ev.school_year_id) : undefined,
+    }));
+
+    return { success: true, events };
   } catch (err: any) {
     return { success: false, events: [], error: err?.message || "Erro ao consultar eventos do calendário." };
   }
@@ -1106,22 +1179,48 @@ export async function getCalendarEventByIdAction(
     const session = await assertCalendarAccess();
     const supabase = await createClient();
 
-    const { data, error } = await (supabase.from("calendar_events") as any)
-      .select(`
-        *,
-        category:calendar_event_categories(*),
-        academic_term:academic_terms(id, name, code),
-        school_year:school_years(id, year, title)
-      `)
+    const { data: eventData, error: eventErr } = await (supabase.from("calendar_events") as any)
+      .select("*")
       .eq("tenant_id", session.tenant.id)
       .eq("id", id)
       .maybeSingle();
 
-    if (error || !data) {
-      return { success: false, error: error?.message || "Evento do calendário não encontrado." };
+    if (eventErr || !eventData) {
+      return { success: false, error: eventErr?.message || "Evento do calendário não encontrado." };
     }
 
-    return { success: true, event: data as CalendarEvent };
+    const [catRes, termRes, yearRes] = await Promise.all([
+      eventData.category_id
+        ? (supabase.from("calendar_event_categories") as any)
+            .select("*")
+            .eq("tenant_id", session.tenant.id)
+            .eq("id", eventData.category_id)
+            .maybeSingle()
+        : { data: null },
+      eventData.academic_term_id
+        ? (supabase.from("academic_terms") as any)
+            .select("id, name, code")
+            .eq("tenant_id", session.tenant.id)
+            .eq("id", eventData.academic_term_id)
+            .maybeSingle()
+        : { data: null },
+      eventData.school_year_id
+        ? (supabase.from("school_years") as any)
+            .select("id, year, title")
+            .eq("tenant_id", session.tenant.id)
+            .eq("id", eventData.school_year_id)
+            .maybeSingle()
+        : { data: null },
+    ]);
+
+    const event: CalendarEvent = {
+      ...eventData,
+      category: (catRes.data as CalendarEventCategory) || undefined,
+      academic_term: (termRes.data as AcademicTerm) || undefined,
+      school_year: (yearRes.data as SchoolYear) || undefined,
+    };
+
+    return { success: true, event };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao consultar evento do calendário." };
   }
@@ -1245,7 +1344,7 @@ export async function createCalendarEventAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true, id: data.id };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao cadastrar evento no calendário." };
@@ -1393,7 +1492,7 @@ export async function updateCalendarEventAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao atualizar evento do calendário." };
@@ -1443,7 +1542,7 @@ export async function deleteCalendarEventAction(
       },
     ]);
 
-    revalidatePath("/app/academico");
+    revalidateCalendarPaths();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao excluir evento do calendário." };
