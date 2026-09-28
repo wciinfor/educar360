@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuthenticatedTenantSession } from "@/types/tenant";
 import { Tenant, TenantUser, Profile, UserRole } from "@/types/database";
+import { calculateTrialInfo } from "./trial";
 import { cookies } from "next/headers";
 
 const TENANT_COOKIE_NAME = "educar360_active_tenant";
@@ -117,6 +118,14 @@ export async function getTenantSession(): Promise<AuthenticatedTenantSession | n
     return null;
   }
 
+  // Busca assinatura SaaS vinculada ao tenant para cálculo dinâmico e auditado do trial
+  const { data: subData } = await (supabase.from("saas_subscriptions") as any)
+    .select("*")
+    .eq("tenant_id", activeTenantUser.tenant.id)
+    .maybeSingle();
+
+  const trialInfo = calculateTrialInfo(activeTenantUser.tenant, subData);
+
   return {
     user: {
       id: user.id,
@@ -135,6 +144,7 @@ export async function getTenantSession(): Promise<AuthenticatedTenantSession | n
       updated_at: activeTenantUser.updated_at,
     },
     role: activeTenantUser.role as UserRole,
+    trialInfo,
     allUserTenants,
   };
 }

@@ -38,7 +38,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { tenant, role } = useTenant();
+  const { tenant, role, trialInfo } = useTenant();
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col shrink-0 border-r border-slate-800 select-none">
@@ -88,8 +88,24 @@ export function Sidebar() {
         })}
       </div>
 
-      {/* Tenant Indicator Footer */}
-      <div className="p-3 border-t border-slate-800 bg-slate-950/30">
+      {/* Tenant & Trial Indicator Footer */}
+      <div className="p-3 border-t border-slate-800 bg-slate-950/30 space-y-2">
+        {trialInfo?.isTrial && (
+          <div
+            className={clsx(
+              "px-2.5 py-1.5 rounded-lg border text-[11px] flex items-center justify-between",
+              trialInfo.urgencyLevel === "warning_1_day"
+                ? "bg-rose-950/50 border-rose-800/60 text-rose-300"
+                : trialInfo.urgencyLevel === "warning_3_days"
+                ? "bg-amber-950/50 border-amber-800/60 text-amber-300"
+                : "bg-indigo-950/40 border-indigo-800/50 text-indigo-300"
+            )}
+          >
+            <span className="font-semibold truncate">Trial: {trialInfo.daysRemaining}d restantes</span>
+            <span className="text-[10px] opacity-75">14 dias</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
           <div className="text-[11px] text-slate-400 truncate flex-1">

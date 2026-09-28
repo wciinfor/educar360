@@ -15,6 +15,7 @@ import {
   requestPlanUpgradeAction,
 } from "@/app/actions/configuracoes";
 import { OFFICIAL_SAAS_PLANS } from "@/lib/plans/constants";
+import { evaluateInstitutionRegistration } from "@/lib/tenant/trial";
 import {
   Building2,
   CreditCard,
@@ -410,6 +411,85 @@ export function GeralTabsClient({
               </div>
             )}
 
+            {/* Status de Completude do Cadastro */}
+              {(() => {
+                const regStatus = evaluateInstitutionRegistration({
+                  ...institution,
+                  status: institution.status as any,
+                  settings: {
+                    responsible_name: institution.responsible_name,
+                    contact_name: institution.responsible_name,
+                  },
+                } as any);
+
+                return (
+                  <div
+                    className={clsx(
+                      "p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all",
+                      regStatus.isComplete
+                        ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
+                        : "bg-amber-50/70 border-amber-200 text-amber-900"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={clsx(
+                          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
+                          regStatus.isComplete
+                            ? "bg-emerald-600 text-white"
+                            : "bg-amber-500 text-white"
+                        )}
+                      >
+                        {regStatus.isComplete ? (
+                          <CheckCircle2 className="w-5 h-5" />
+                        ) : (
+                          <AlertCircle className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm">
+                            {regStatus.isComplete
+                              ? "Cadastro da Instituição Completo"
+                              : "Cadastro da Instituição Pendente"}
+                          </span>
+                          <span
+                            className={clsx(
+                              "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                              regStatus.isComplete
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-amber-100 text-amber-800"
+                            )}
+                          >
+                            {regStatus.completedCount}/6 Campos
+                          </span>
+                        </div>
+                        <p className="text-xs opacity-80 mt-0.5">
+                          {regStatus.isComplete
+                            ? "Todos os dados prioritários para documentação e contratação de planos estão validados."
+                            : `Campos prioritários pendentes: ${regStatus.missingFields.join(", ")}.`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 border-current/10">
+                      <div className="text-right">
+                        <div className="text-xs font-bold">{regStatus.percentage}% Concluído</div>
+                        <div className="w-24 bg-current/10 h-1.5 rounded-full overflow-hidden mt-1">
+                          <div
+                            className={clsx(
+                              "h-full rounded-full transition-all",
+                              regStatus.isComplete ? "bg-emerald-600" : "bg-amber-500"
+                            )}
+                            style={{ width: `${regStatus.percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -427,11 +507,12 @@ export function GeralTabsClient({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Nome Fantasia
+                  Nome Fantasia *
                 </label>
                 <input
                   type="text"
                   disabled={!isAdmin}
+                  placeholder="Nome comercial da escola"
                   value={institution.trade_name || ""}
                   onChange={(e) => setInstitution({ ...institution, trade_name: e.target.value })}
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60"
@@ -439,7 +520,7 @@ export function GeralTabsClient({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">CNPJ</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">CNPJ *</label>
                 <input
                   type="text"
                   disabled={!isAdmin}
@@ -455,7 +536,7 @@ export function GeralTabsClient({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  E-mail Institucional
+                  E-mail Institucional *
                 </label>
                 <input
                   type="email"
@@ -468,7 +549,7 @@ export function GeralTabsClient({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Telefone / WhatsApp Principal
+                  Telefone / WhatsApp Institucional *
                 </label>
                 <input
                   type="text"
@@ -478,6 +559,22 @@ export function GeralTabsClient({
                   value={institution.phone || ""}
                   onChange={(e) =>
                     setInstitution({ ...institution, phone: maskPhone(e.target.value) })
+                  }
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nome do Responsável pela Escola *
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  placeholder="Diretor(a) ou Mantenedor(a)"
+                  value={institution.responsible_name || ""}
+                  onChange={(e) =>
+                    setInstitution({ ...institution, responsible_name: e.target.value })
                   }
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all disabled:opacity-60"
                 />

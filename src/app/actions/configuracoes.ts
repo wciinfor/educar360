@@ -68,6 +68,8 @@ export async function getInstitutionDataAction(): Promise<{
       email: tenant.email,
       phone: tenant.phone,
       status: tenant.status,
+      responsible_name: settings.responsible_name || settings.contact_name || null,
+      responsible_phone: settings.responsible_phone || settings.contact_phone || null,
       logo_url: settings.logo_url || null,
       website: settings.website || null,
       address_street: settings.address_street || null,
@@ -106,6 +108,14 @@ export async function updateInstitutionDataAction(
 
     const updatedSettings = {
       ...currentSettings,
+      responsible_name:
+        payload.responsible_name !== undefined
+          ? payload.responsible_name?.trim() || null
+          : currentSettings.responsible_name || currentSettings.contact_name || null,
+      responsible_phone:
+        payload.responsible_phone !== undefined
+          ? payload.responsible_phone?.trim() || null
+          : currentSettings.responsible_phone || currentSettings.contact_phone || null,
       logo_url: payload.logo_url !== undefined ? payload.logo_url : currentSettings.logo_url,
       website: payload.website !== undefined ? payload.website : currentSettings.website,
       address_street: payload.address_street !== undefined ? payload.address_street : currentSettings.address_street,
@@ -146,14 +156,128 @@ export async function updateInstitutionDataAction(
           name: payload.name.trim(),
           cnpj: payload.cnpj,
           email: payload.email,
+          responsible_name: updatedSettings.responsible_name,
         },
       },
     ]);
 
     revalidatePath("/app/configuracoes/geral");
+    revalidatePath("/app/trial-expirado");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Erro ao salvar dados da escola." };
+  }
+}
+
+/**
+ * Ação obrigatória para completar o cadastro prioritário da instituição
+ * (utilizada tanto em Trial Ativo quanto em Trial Expirado).
+ */
+export async function completeInstitutionRegistrationAction(payload: {
+  cnpj: string;
+  name: string;
+  trade_name: string;
+  email: string;
+  phone: string;
+  responsible_name: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await getTenantSession();
+    if (!session) {
+      return { success: false, error: "Não autenticado ou sessão expirada." };
+    }
+
+    const cleanCnpj = payload.cnpj?.replace(/\D/g, "") || "";
+    if (cleanCnpj.length !== 14) {
+      return { success: false, error: "CNPJ inválido. Informe os 14 dígitos do CNPJ da instituição." };
+    }
+
+    const name = payload.name?.trim();
+    if (!name || name.length < 3) {
+      return { success: false, error: "A Razão Social oficial é obrigatória (mínimo de 3 caracteres)." };
+    }
+
+    const tradeName = payload.trade_name?.trim() || name;
+    if (!tradeName || tradeName.length < 2) {
+      return { success: false, error: "O Nome Fantasia é obrigatório." };
+    }
+
+    const email = payload.email?.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { success: false, error: "Informe um e-mail institucional válido." };
+    }
+
+    const cleanPhone = payload.phone?.replace(/\D/g, "") || "";
+    if (cleanPhone.length < 10) {
+      return { success: false, error: "Informe um telefone/WhatsApp institucional válido com DDD." };
+    }
+
+    const responsibleName = payload.responsible_name?.trim();
+    if (!responsibleName || responsibleName.length < 3) {
+      return { success: false, error: "O nome do Responsável pela instituição é obrigatório." };
+    }
+
+    const supabase = await createClient();
+
+    const { data: currentTenant } = await (supabase.from("tenants") as any)
+      .select("settings")
+      .eq("id", session.tenant.id)
+      .single();
+
+    const currentSettings = (currentTenant?.settings as Record<string, any>) || {};
+
+    const updatedSettings = {
+      ...currentSettings,
+      responsible_name: responsibleName,
+      contact_name: responsibleName,
+      registration_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: updErr } = await (supabase.from("tenants") as any)
+      .update({
+        cnpj: payload.cnpj.trim(),
+        name,
+        trade_name: tradeName,
+        email,
+        phone: payload.phone.trim(),
+        settings: updatedSettings,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", session.tenant.id);
+
+    if (updErr) {
+      if (updErr.code === "23505") {
+        return { success: false, error: "Este CNPJ já está cadastrado para outra instituição no sistema." };
+      }
+      return { success: false, error: updErr.message || "Erro ao salvar cadastro institucional." };
+    }
+
+    // Auditoria
+    await (supabase.from("audit_logs") as any).insert([
+      {
+        tenant_id: session.tenant.id,
+        user_id: session.user.id,
+        action: "INSTITUTION_REGISTRATION_COMPLETED",
+        entity_name: "tenants",
+        entity_id: session.tenant.id,
+        new_values: {
+          cnpj: payload.cnpj,
+          name,
+          trade_name: tradeName,
+          email,
+          phone: payload.phone,
+          responsible_name: responsibleName,
+        },
+      },
+    ]);
+
+    revalidatePath("/app/configuracoes/geral");
+    revalidatePath("/app/trial-expirado");
+    revalidatePath("/app");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Erro ao atualizar cadastro da instituição." };
   }
 }
 

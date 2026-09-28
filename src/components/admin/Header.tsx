@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Check,
 } from "lucide-react";
+import { TrialHeaderBadge } from "@/components/trial/TrialBanner";
 
 export function Header() {
   const { tenant, role, profile, userTenants, switchTenant } = useTenant();
@@ -30,9 +31,9 @@ export function Header() {
   const roleConfig = role ? ROLE_DEFINITIONS[role] : null;
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-4">
       {/* Tenant Switcher / School Identifier */}
-      <div className="relative">
+      <div className="relative flex items-center gap-3">
         <button
           type="button"
           onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
@@ -51,7 +52,7 @@ export function Header() {
         </button>
 
         {tenantDropdownOpen && userTenants.length > 1 && (
-          <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-30">
+          <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-30 top-full">
             <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
               Alternar Instituição
             </div>
@@ -79,8 +80,11 @@ export function Header() {
         )}
       </div>
 
-      {/* User profile & Actions */}
+      {/* Trial Status & User profile */}
       <div className="flex items-center gap-4">
+        {/* Badge do Trial (Discreto e Dinâmico) */}
+        <TrialHeaderBadge />
+
         <div className="relative">
           <button
             type="button"

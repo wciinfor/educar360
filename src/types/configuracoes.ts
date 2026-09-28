@@ -9,6 +9,9 @@ export interface TenantInstitutionData {
   email: string | null;
   phone: string | null;
   status: string;
+  // Campos do responsável
+  responsible_name?: string | null;
+  responsible_phone?: string | null;
   // Campos estruturados do JSONB settings
   logo_url?: string | null;
   website?: string | null;
