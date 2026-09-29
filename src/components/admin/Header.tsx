@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useTenant } from "@/contexts/TenantContext";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { ROLE_DEFINITIONS } from "@/lib/rbac/permissions";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -12,11 +13,13 @@ import {
   User,
   ShieldCheck,
   Check,
+  Menu,
 } from "lucide-react";
 import { TrialHeaderBadge } from "@/components/trial/TrialBanner";
 
 export function Header() {
   const { tenant, role, profile, userTenants, switchTenant } = useTenant();
+  const { openMobile } = useSidebar();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   const router = useRouter();
@@ -31,24 +34,35 @@ export function Header() {
   const roleConfig = role ? ROLE_DEFINITIONS[role] : null;
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-4">
-      {/* Tenant Switcher / School Identifier */}
-      <div className="relative flex items-center gap-3">
+    <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-20 shadow-xs gap-4">
+      {/* Left side: Mobile Menu Button & Tenant Switcher */}
+      <div className="relative flex items-center gap-2 sm:gap-3">
+        {/* Mobile Hamburger Button */}
+        <button
+          type="button"
+          onClick={openMobile}
+          aria-label="Abrir menu de navegação"
+          className="lg:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Tenant Switcher / School Identifier */}
         <button
           type="button"
           onClick={() => setTenantDropdownOpen(!tenantDropdownOpen)}
-          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors text-slate-700"
+          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors text-slate-700 max-w-[200px] sm:max-w-xs md:max-w-md"
         >
-          <Building2 className="w-4 h-4 text-indigo-600" />
-          <div className="text-left">
-            <span className="text-xs font-semibold block leading-tight text-slate-900">
+          <Building2 className="w-4 h-4 text-indigo-600 shrink-0" />
+          <div className="text-left min-w-0">
+            <span className="text-xs font-semibold block leading-tight text-slate-900 truncate">
               {tenant?.name || "Carregando Escola..."}
             </span>
-            <span className="text-[10px] text-slate-500 block">
+            <span className="text-[10px] text-slate-500 block truncate">
               CNPJ: {tenant?.cnpj || "Não informado"}
             </span>
           </div>
-          {userTenants.length > 1 && <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+          {userTenants.length > 1 && <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />}
         </button>
 
         {tenantDropdownOpen && userTenants.length > 1 && (

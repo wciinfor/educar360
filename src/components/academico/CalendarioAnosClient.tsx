@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   SchoolYear,
   AcademicTerm,
@@ -151,7 +152,29 @@ export function CalendarioAnosClient({
   currentUserId,
   schoolName,
 }: CalendarioAnosClientProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>("visual");
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as ActiveTab | null;
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (
+      tabFromUrl &&
+      ["visual", "dias_letivos", "relatorio", "anos", "eventos", "categorias"].includes(tabFromUrl)
+    ) {
+      return tabFromUrl;
+    }
+    return "visual";
+  });
+
+  useEffect(() => {
+    const tab = searchParams.get("tab") as ActiveTab | null;
+    if (
+      tab &&
+      ["visual", "dias_letivos", "relatorio", "anos", "eventos", "categorias"].includes(tab)
+    ) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
   const [schoolYears, setSchoolYears] = useState<SchoolYear[]>(initialSchoolYears);
   const [categories, setCategories] = useState<CalendarEventCategory[]>(initialCategories);
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents);
