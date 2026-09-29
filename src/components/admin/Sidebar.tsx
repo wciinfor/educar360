@@ -193,7 +193,7 @@ export function Sidebar() {
         <div>
           <div
             className={clsx(
-              "h-16 flex items-center border-b border-slate-800/80 bg-[#0B1120] transition-all px-4",
+              "h-16 flex items-center border-b border-slate-800/80 bg-[#0B1120]/60 backdrop-blur-xs transition-all px-4",
               collapsed ? "justify-center" : "justify-between"
             )}
           >
@@ -568,8 +568,14 @@ export function Sidebar() {
     <>
       {/* Desktop Sidebar */}
       <aside
+        style={{
+          backgroundImage: "url('/images/landing/bg_menu.png')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+        }}
         className={clsx(
-          "hidden lg:flex flex-col shrink-0 bg-[#0B1120] text-slate-100 border-r border-slate-800/80 transition-all duration-300 ease-in-out",
+          "hidden lg:flex flex-col shrink-0 bg-[#0B1120] text-slate-100 border-r border-slate-800/80 transition-all duration-300 ease-in-out relative overflow-hidden",
           isCollapsed ? "w-20" : "w-64"
         )}
       >
@@ -586,7 +592,15 @@ export function Sidebar() {
           />
 
           {/* Drawer Panel */}
-          <aside className="relative w-72 max-w-[85vw] bg-[#0B1120] text-slate-100 h-full shadow-2xl flex flex-col z-10 border-r border-slate-800 animate-in slide-in-from-left duration-200">
+          <aside
+            style={{
+              backgroundImage: "url('/images/landing/bg_menu.png')",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+            className="relative w-72 max-w-[85vw] bg-[#0B1120] text-slate-100 h-full shadow-2xl flex flex-col z-10 border-r border-slate-800 animate-in slide-in-from-left duration-200 overflow-hidden"
+          >
             {renderSidebarContent(false, true)}
           </aside>
         </div>
