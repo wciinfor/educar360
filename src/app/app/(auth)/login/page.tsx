@@ -72,7 +72,12 @@ export default function TenantLoginPage() {
           const profile = profileData as unknown as Profile | null;
 
           if (profile?.is_platform_admin) {
-            router.push("/admin/dashboard");
+            const adminBase = getAdminBaseUrl();
+            if (typeof window !== "undefined" && (window.location.host.startsWith("admin.") || window.location.host.startsWith("app."))) {
+              window.location.href = `${adminBase}/dashboard`;
+            } else {
+              router.push("/admin/dashboard");
+            }
             return;
           }
 
@@ -82,7 +87,11 @@ export default function TenantLoginPage() {
           return;
         }
 
-        router.push("/app/dashboard");
+        if (typeof window !== "undefined" && window.location.host.startsWith("app.")) {
+          router.push("/dashboard");
+        } else {
+          router.push("/app/dashboard");
+        }
         router.refresh();
       }
     } catch (err: any) {

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTenant } from "@/contexts/TenantContext";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { canAccessModule, SchoolModule, ROLE_DEFINITIONS } from "@/lib/rbac/permissions";
@@ -17,37 +17,20 @@ import {
   Globe,
   Settings,
   School,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
-  Calendar,
-  CalendarCheck,
-  CalendarDays,
-  FileSpreadsheet,
-  Layers,
-  Tags,
   Clock,
   LogOut,
   X,
   ShieldCheck,
-  Building,
-  Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
-
-interface SubItem {
-  name: string;
-  href: string;
-  icon?: React.ElementType;
-  tabKey?: string;
-}
 
 interface NavItem {
   name: string;
   href: string;
   module: SchoolModule;
   icon: React.ElementType;
-  subItems?: SubItem[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -74,44 +57,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/app/academico",
     icon: GraduationCap,
     module: "academico",
-    subItems: [
-      {
-        name: "Calendário Escolar",
-        href: "/app/academico/calendario",
-        icon: Calendar,
-        tabKey: "visual",
-      },
-      {
-        name: "Controle de Dias Letivos",
-        href: "/app/academico/calendario?tab=dias_letivos",
-        icon: CalendarCheck,
-        tabKey: "dias_letivos",
-      },
-      {
-        name: "Relatório Oficial",
-        href: "/app/academico/calendario?tab=relatorio",
-        icon: FileSpreadsheet,
-        tabKey: "relatorio",
-      },
-      {
-        name: "Anos Letivos & Etapas",
-        href: "/app/academico/calendario?tab=anos",
-        icon: Layers,
-        tabKey: "anos",
-      },
-      {
-        name: "Eventos & Feriados",
-        href: "/app/academico/calendario?tab=eventos",
-        icon: CalendarDays,
-        tabKey: "eventos",
-      },
-      {
-        name: "Categorias de Eventos",
-        href: "/app/academico/calendario?tab=categorias",
-        icon: Tags,
-        tabKey: "categorias",
-      },
-    ],
   },
   {
     name: "Financeiro",
@@ -141,30 +86,10 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const { tenant, role, profile, trialInfo } = useTenant();
   const { isCollapsed, toggleCollapse, isMobileOpen, closeMobile } = useSidebar();
   const supabase = createClient();
-
-  // Controle de expansão de acordeão dos submenus
-  const [openSubmenu, setOpenSubmenu] = useState<string | null>(() => {
-    if (pathname.startsWith("/app/academico")) {
-      return "Acadêmico";
-    }
-    return null;
-  });
-
-  // Mantém o acordeão aberto se a rota atual for do módulo
-  useEffect(() => {
-    if (pathname.startsWith("/app/academico")) {
-      setOpenSubmenu("Acadêmico");
-    }
-  }, [pathname]);
-
-  const toggleAccordion = (name: string) => {
-    setOpenSubmenu((prev) => (prev === name ? null : name));
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -183,8 +108,6 @@ export function Sidebar() {
       })
     : null);
 
-  const currentTab = searchParams.get("tab");
-
   // Conteúdo unificado do Sidebar para Desktop e Mobile Drawer
   const renderSidebarContent = (collapsed: boolean, isDrawer = false) => {
     return (
@@ -193,26 +116,24 @@ export function Sidebar() {
         <div>
           <div
             className={clsx(
-              "h-16 flex items-center border-b border-slate-800/80 bg-[#0B1120]/60 backdrop-blur-xs transition-all px-4",
-              collapsed ? "justify-center" : "justify-between"
+              "h-18 relative flex items-center border-b border-slate-800/80 bg-[#0B1120]/60 backdrop-blur-xs transition-all px-4 justify-center"
             )}
           >
             <Link
               href="/app/dashboard"
-              className="flex items-center gap-3 group focus:outline-none min-w-0"
+              className="flex items-center justify-center group focus:outline-none py-1.5"
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30 shrink-0 group-hover:scale-105 transition-transform">
-                <School className="w-5 h-5 text-white" />
-              </div>
-              {!collapsed && (
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-bold tracking-tight text-white leading-tight flex items-center gap-1.5">
-                    Educar<span className="text-indigo-400">360</span>
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400 truncate max-w-[140px]">
-                    {tenant?.name || "Gestão Escolar"}
-                  </span>
+              {collapsed ? (
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30 shrink-0 group-hover:scale-105 transition-transform">
+                  <School className="w-5 h-5 text-white" />
                 </div>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src="/images/landing/logoh_escuro.png"
+                  alt="Educar360"
+                  className="h-11 w-auto max-w-[185px] object-contain group-hover:scale-102 transition-transform"
+                />
               )}
             </Link>
 
@@ -221,7 +142,7 @@ export function Sidebar() {
               <button
                 type="button"
                 onClick={closeMobile}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
                 aria-label="Fechar menu"
               >
                 <X className="w-5 h-5" />
@@ -231,7 +152,7 @@ export function Sidebar() {
                 <button
                   type="button"
                   onClick={toggleCollapse}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
                   title="Recolher menu"
                   aria-label="Recolher menu"
                 >
@@ -316,8 +237,6 @@ export function Sidebar() {
               const isCurrentModule =
                 pathname === item.href ||
                 (item.href !== "/app" && pathname.startsWith(item.href));
-              const hasSubItems = item.subItems && item.subItems.length > 0;
-              const isAccordionOpen = openSubmenu === item.name;
               const Icon = item.icon;
 
               if (collapsed) {
@@ -347,101 +266,23 @@ export function Sidebar() {
               // Expanded Item
               return (
                 <div key={item.name} className="space-y-0.5">
-                  {hasSubItems ? (
-                    <div>
-                      <div
-                        className={clsx(
-                          "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer group",
-                          isCurrentModule
-                            ? "bg-indigo-600/15 text-indigo-300 border border-indigo-500/20"
-                            : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
-                        )}
-                        onClick={() => toggleAccordion(item.name)}
-                      >
-                        <Link
-                          href={item.href}
-                          className="flex items-center gap-3 flex-1 min-w-0"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                          }}
-                        >
-                          <Icon
-                            className={clsx(
-                              "w-4 h-4 shrink-0 transition-colors",
-                              isCurrentModule ? "text-indigo-400" : "text-slate-400 group-hover:text-slate-200"
-                            )}
-                          />
-                          <span className="truncate">{item.name}</span>
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleAccordion(item.name);
-                          }}
-                          className="p-1 text-slate-400 hover:text-white rounded-md transition-colors"
-                        >
-                          {isAccordionOpen ? (
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          ) : (
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Submenu Accordion */}
-                      {isAccordionOpen && (
-                        <div className="border-l-2 border-slate-800/80 ml-5 pl-3 py-1.5 space-y-1 my-1">
-                          {item.subItems!.map((sub) => {
-                            const isSubActive =
-                              sub.tabKey && pathname.startsWith("/app/academico/calendario")
-                                ? currentTab === sub.tabKey || (!currentTab && sub.tabKey === "visual")
-                                : pathname === sub.href;
-                            const SubIcon = sub.icon || Calendar;
-
-                            return (
-                              <Link
-                                key={sub.name}
-                                href={sub.href}
-                                className={clsx(
-                                  "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
-                                  isSubActive
-                                    ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
-                                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
-                                )}
-                              >
-                                <SubIcon
-                                  className={clsx(
-                                    "w-3.5 h-3.5 shrink-0",
-                                    isSubActive ? "text-indigo-400" : "text-slate-500"
-                                  )}
-                                />
-                                <span className="truncate text-[11px]">{sub.name}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <Link
-                      href={item.href}
+                  <Link
+                    href={item.href}
+                    className={clsx(
+                      "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                      isCurrentModule
+                        ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/25 border border-indigo-500/30"
+                        : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+                    )}
+                  >
+                    <Icon
                       className={clsx(
-                        "flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
-                        isCurrentModule
-                          ? "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md shadow-indigo-600/25 border border-indigo-500/30"
-                          : "text-slate-300 hover:bg-slate-800/60 hover:text-white"
+                        "w-4 h-4 shrink-0 transition-colors",
+                        isCurrentModule ? "text-white" : "text-slate-400 group-hover:text-slate-200"
                       )}
-                    >
-                      <Icon
-                        className={clsx(
-                          "w-4 h-4 shrink-0 transition-colors",
-                          isCurrentModule ? "text-white" : "text-slate-400 group-hover:text-slate-200"
-                        )}
-                      />
-                      <span className="truncate">{item.name}</span>
-                    </Link>
-                  )}
+                    />
+                    <span className="truncate">{item.name}</span>
+                  </Link>
                 </div>
               );
             })}
@@ -511,26 +352,6 @@ export function Sidebar() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* School & Tenant Card */}
-          {collapsed ? (
-            <div className="relative group flex justify-center">
-              <div className="w-10 h-10 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                <Building className="w-4 h-4 text-slate-300" />
-              </div>
-              <div className="absolute left-full ml-3.5 bottom-0 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white shadow-xl z-50 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity">
-                <div className="font-semibold text-slate-100">{tenant?.name || "Instituição"}</div>
-                <div className="text-[10px] text-slate-400">Tenant: {tenant?.slug || "isolado"}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/40 border border-slate-700/40">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/20 shrink-0" />
-              <div className="text-[11px] text-slate-400 truncate flex-1">
-                Tenant: <strong className="text-slate-200">{tenant?.slug || "isolado"}</strong>
-              </div>
             </div>
           )}
 

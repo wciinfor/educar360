@@ -68,7 +68,11 @@ export default function PlatformLoginPage() {
           return;
         }
 
-        router.push("/admin/dashboard");
+        if (typeof window !== "undefined" && window.location.host.startsWith("admin.")) {
+          router.push("/dashboard");
+        } else {
+          router.push("/admin/dashboard");
+        }
         router.refresh();
       }
     } catch (err: any) {

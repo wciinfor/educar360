@@ -17,13 +17,22 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Identificação do Subdomínio / Host
-  const isPlatformAdminSubdomain = host.startsWith("admin.");
-  const isTenantAppSubdomain = host.startsWith("app.");
+  const isPlatformAdminSubdomain = host.startsWith("admin.") || host.includes("admin.educar360.com.br");
+  const isTenantAppSubdomain = host.startsWith("app.") || host.includes("app.educar360.com.br");
 
-  // Identificação de compatibilidade para desenvolvimento local ou caminhos diretos
-  const isDirectTenantAuthRoute = rawPathname === "/ativar" || rawPathname === "/login";
+  // Identificação clara e isolada dos contextos:
+  // 1. Contexto Admin da Plataforma: subdomínio admin.* OU rotas /admin/*
   const isPlatformAdminHost = isPlatformAdminSubdomain || rawPathname.startsWith("/admin");
-  const isTenantAppHost = isTenantAppSubdomain || rawPathname.startsWith("/app") || isDirectTenantAuthRoute;
+
+  // 2. Contexto Tenant Escolar: subdomínio app.* OU rotas /app/* OU rotas de autenticação direta quando NÃO for admin host
+  const isTenantAppHost = !isPlatformAdminHost && (
+    isTenantAppSubdomain ||
+    rawPathname.startsWith("/app") ||
+    rawPathname === "/login" ||
+    rawPathname === "/ativar"
+  );
+
+  // 3. Contexto Landing Page pública: quando não for admin nem tenant
   const isLandingHost = !isPlatformAdminHost && !isTenantAppHost;
 
   // 1. REGRAS DA LANDING PAGE (www.educar360.com.br / educar360.com.br / localhost padrão)
@@ -31,15 +40,22 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Rewrite transparente para subdomínios ou rotas de autenticação sem prefixo (mantém URL limpa)
+  // Rewrite transparente para subdomínios (mantém URL limpa no navegador)
   let effectivePathname = rawPathname;
   let shouldRewrite = false;
 
-  if ((isTenantAppSubdomain || isDirectTenantAuthRoute) && !rawPathname.startsWith("/app")) {
-    effectivePathname = rawPathname === "/" ? "/app/dashboard" : `/app${rawPathname}`;
-    shouldRewrite = true;
-  } else if (isPlatformAdminSubdomain && !rawPathname.startsWith("/admin")) {
-    effectivePathname = rawPathname === "/" ? "/admin/dashboard" : `/admin${rawPathname}`;
+  if (isPlatformAdminSubdomain) {
+    if (!rawPathname.startsWith("/admin")) {
+      effectivePathname = rawPathname === "/" ? "/admin/dashboard" : `/admin${rawPathname}`;
+      shouldRewrite = true;
+    }
+  } else if (isTenantAppSubdomain) {
+    if (!rawPathname.startsWith("/app")) {
+      effectivePathname = rawPathname === "/" ? "/app/dashboard" : `/app${rawPathname}`;
+      shouldRewrite = true;
+    }
+  } else if (!isPlatformAdminHost && (rawPathname === "/login" || rawPathname === "/ativar")) {
+    effectivePathname = `/app${rawPathname}`;
     shouldRewrite = true;
   }
 
@@ -149,6 +165,13 @@ export async function updateSession(request: NextRequest) {
     if (!user && !isPublicAppRoute) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = isTenantAppSubdomain ? "/login" : "/app/login";
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // 3.2 Se usuário já autenticado tentar acessar a tela de login pública da escola
+    if (user && isPublicAppRoute) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = isTenantAppSubdomain ? "/dashboard" : "/app/dashboard";
       return NextResponse.redirect(redirectUrl);
     }
 

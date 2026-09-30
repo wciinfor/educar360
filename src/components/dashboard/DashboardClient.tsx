@@ -98,42 +98,58 @@ export function DashboardClient({ initialData, session }: DashboardClientProps) 
       {/* ========================================================================= */}
       {/* 1. HEADER INSTITUCIONAL & SAUDAÇÃO PERSONALIZADA */}
       {/* ========================================================================= */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Olá, {session.profile.full_name || "Gestor Escolar"}!
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Aqui está o panorama do <strong className="text-slate-800 font-bold">{session.tenant.name}</strong>. Tenha uma visão completa da sua instituição.
-          </p>
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-r from-[#F4F7FB] via-[#EEF4FB] to-[#E8F0F9] p-6 sm:p-7 shadow-xs">
+        {/* Imagem educacional institucional nítida e visível no lado direito (40-50%) */}
+        <div className="absolute inset-y-0 right-0 w-full sm:w-1/2 lg:w-5/12 pointer-events-none overflow-hidden select-none">
+          <div
+            style={{
+              backgroundImage: "url('/images/landing/bg_dash.png')",
+              backgroundSize: "cover",
+              backgroundPosition: "right center",
+              backgroundRepeat: "no-repeat",
+            }}
+            className="w-full h-full"
+          />
+          {/* Transição suave em gradiente claro entre a imagem e o fundo */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#F4F7FB] via-[#F4F7FB]/40 to-transparent" />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Calendar className="w-4 h-4" />
-            </div>
+        {/* Conteúdo em primeiro plano com alto contraste */}
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          {/* Lado Esquerdo: Área limpa com tipografia escura institucional, data/ano letivo e seletor */}
+          <div className="max-w-2xl space-y-3">
             <div>
-              <div className="text-xs font-bold text-slate-800">
-                {academicCalendarInfo.todayFormatted}
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
+                Olá, {session.profile.full_name || "Gestor Escolar Educar360"}!
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
+                Aqui está o panorama do <strong className="text-indigo-600 font-bold">{session.tenant.name}</strong>. Tenha uma visão completa da sua instituição.
+              </p>
+            </div>
+
+            {/* Linha integrada: Data/Ano Letivo e Seletor de Período lado a lado */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-0.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 border border-slate-200/90 shadow-xs text-xs text-slate-700 backdrop-blur-xs">
+                <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="font-semibold text-slate-900">{academicCalendarInfo.todayFormatted}</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-medium text-slate-600">Ano Letivo <strong className="text-indigo-600 font-semibold">{academicCalendarInfo.academicYear}</strong></span>
               </div>
-              <div className="text-[11px] text-slate-500 font-medium">
-                Ano Letivo {academicCalendarInfo.academicYear}
+
+              {/* Seletor de Período posicionado imediatamente à direita */}
+              <div className="relative">
+                <select
+                  value={selectedPeriod}
+                  onChange={(e) => setSelectedPeriod(e.target.value)}
+                  className="appearance-none pl-3 pr-7 py-1.5 bg-white/90 hover:bg-white border border-slate-200/90 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs backdrop-blur-xs transition-colors"
+                >
+                  <option value="all" className="text-slate-900">Todos os períodos</option>
+                  <option value="current_year" className="text-slate-900">Ano letivo {academicCalendarInfo.academicYear}</option>
+                  <option value="recent" className="text-slate-900">Últimos 30 dias</option>
+                </select>
+                <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-          </div>
-
-          <div className="relative">
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="appearance-none pl-3.5 pr-8 py-2.5 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs"
-            >
-              <option value="all">Todos os períodos</option>
-              <option value="current_year">Ano letivo {academicCalendarInfo.academicYear}</option>
-              <option value="recent">Últimos 30 dias</option>
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
       </div>
