@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CalendarCheck, Layers, Award, FileSpreadsheet, GraduationCap } from "lucide-react";
+import { BookOpen, CalendarCheck, Layers, Award, FileSpreadsheet, GraduationCap, CalendarDays } from "lucide-react";
 import clsx from "clsx";
 
 interface NavTab {
@@ -25,6 +25,12 @@ const ACADEMICO_TABS: NavTab[] = [
     href: "/app/academico/calendario",
     description: "Anos letivos, etapas e períodos acadêmicos",
     icon: CalendarCheck,
+  },
+  {
+    name: "Grade Horária",
+    href: "/app/academico/grade-horaria",
+    description: "Montagem, distribuição de aulas e bloqueios",
+    icon: CalendarDays,
   },
   {
     name: "Diário de Classe",
